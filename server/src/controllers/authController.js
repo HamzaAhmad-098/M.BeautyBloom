@@ -1,304 +1,543 @@
 import asyncHandler from 'express-async-handler';
+import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import User from '../models/User.js';
-import generateToken from '../utils/generateToken.js';
+import sendEmail from '../utils/sendEmail.js';
 
-// @desc    Auth user & get token
-// @route   POST /api/users/login
+// Generate JWT Token
+const generateToken = (userId) => {
+  return jwt.sign({ userId }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRE || '7d',
+  });
+};
+
+// Set JWT Cookie
+const setTokenCookie = (res, token) => {
+  const cookieOptions = {
+    expires: new Date(
+      Date.now() + (process.env.JWT_COOKIE_EXPIRE || 7) * 24 * 60 * 60 * 1000
+    ),
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+  };
+
+  res.cookie('jwt', token, cookieOptions);
+};
+
+// @desc    Register user
+// @route   POST /api/auth/register
 // @access  Public
-const authUser = asyncHandler(async (req, res) => {
-  const { email, password } = req.body;
+const register = asyncHandler(async (req, res) => {
+  const { name, email, password, phone } = req.body;
 
-  const user = await User.findOne({ email });
-
-  if (user && (await user.matchPassword(password))) {
-    res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      isAdmin: user.isAdmin,
-      token: generateToken(user._id),
-    });
-  } else {
-    res.status(401);
-    throw new Error('Invalid email or password');
-  }
-});
-
-// @desc    Register a new user
-// @route   POST /api/users
-// @access  Public
-const registerUser = asyncHandler(async (req, res) => {
-  const { name, email, password } = req.body;
-
+  // Check if user exists
   const userExists = await User.findOne({ email });
-
+  
   if (userExists) {
     res.status(400);
-    throw new Error('User already exists');
+    throw new Error('User already exists with this email');
   }
 
+  // Create user
   const user = await User.create({
     name,
     email,
     password,
+    phone,
   });
 
-  if (user) {
-    res.status(201).json({
-      _id: user._id,
-      name: user.name,
+  // Generate verification token
+  const verificationToken = user.createEmailVerificationToken();
+  await user.save();
+
+  // Create verification URL
+  const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${verificationToken}`;
+
+  // Send verification email
+  try {
+    await sendEmail({
       email: user.email,
-      isAdmin: user.isAdmin,
-      token: generateToken(user._id),
+      subject: 'Email Verification - Cosmetics Store',
+      template: 'emailVerification',
+      data: {
+        name: user.name,
+        verificationUrl,
+      },
     });
-  } else {
-    res.status(400);
-    throw new Error('Invalid user data');
+
+    // Generate token
+    const token = generateToken(user._id);
+
+    // Remove password from response
+    user.password = undefined;
+
+    res.status(201).json({
+      success: true,
+      token,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        isVerified: user.isVerified,
+        isAdmin: user.isAdmin,
+        avatar: user.avatar,
+      },
+      message: 'Registration successful! Please check your email to verify your account.',
+    });
+  } catch (error) {
+    user.emailVerificationToken = undefined;
+    user.emailVerificationExpire = undefined;
+    await user.save();
+    
+    res.status(500);
+    throw new Error('Email could not be sent. Please try again later.');
   }
 });
 
-// @desc    Get user profile
-// @route   GET /api/users/profile
-// @access  Private
-const getUserProfile = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user._id)
-    .populate('wishlist')
-    .populate('cart.product');
+// @desc    Verify email
+// @route   GET /api/auth/verify-email/:token
+// @access  Public
+const verifyEmail = asyncHandler(async (req, res) => {
+  // Get token from params
+  const verificationToken = crypto
+    .createHash('sha256')
+    .update(req.params.token)
+    .digest('hex');
 
-  if (user) {
-    res.json({
+  const user = await User.findOne({
+    emailVerificationToken: verificationToken,
+    emailVerificationExpire: { $gt: Date.now() },
+  });
+
+  if (!user) {
+    res.status(400);
+    throw new Error('Invalid or expired verification token');
+  }
+
+  // Mark as verified and clear token
+  user.isVerified = true;
+  user.emailVerificationToken = undefined;
+  user.emailVerificationExpire = undefined;
+  await user.save();
+
+  res.status(200).json({
+    success: true,
+    message: 'Email verified successfully! You can now login.',
+  });
+});
+
+// @desc    Resend verification email
+// @route   POST /api/auth/resend-verification
+// @access  Private
+const resendVerificationEmail = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id);
+
+  if (!user) {
+    res.status(404);
+    throw new Error('User not found');
+  }
+
+  if (user.isVerified) {
+    res.status(400);
+    throw new Error('Email is already verified');
+  }
+
+  // Check if there's a recent verification request (prevent spam)
+  if (user.emailVerificationExpire && user.emailVerificationExpire > Date.now()) {
+    const timeLeft = Math.ceil((user.emailVerificationExpire - Date.now()) / (1000 * 60));
+    res.status(429);
+    throw new Error(`Please wait ${timeLeft} minutes before requesting another verification email`);
+  }
+
+  // Generate new verification token
+  const verificationToken = user.createEmailVerificationToken();
+  await user.save();
+
+  // Create verification URL
+  const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${verificationToken}`;
+
+  // Send verification email
+  try {
+    await sendEmail({
+      email: user.email,
+      subject: 'Email Verification - Cosmetics Store',
+      template: 'emailVerification',
+      data: {
+        name: user.name,
+        verificationUrl,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Verification email sent successfully!',
+    });
+  } catch (error) {
+    user.emailVerificationToken = undefined;
+    user.emailVerificationExpire = undefined;
+    await user.save();
+    
+    res.status(500);
+    throw new Error('Email could not be sent. Please try again later.');
+  }
+});
+
+// @desc    Login user
+// @route   POST /api/auth/login
+// @access  Public
+const login = asyncHandler(async (req, res) => {
+  const { email, password, rememberMe } = req.body;
+
+  // Validate email & password
+  if (!email || !password) {
+    res.status(400);
+    throw new Error('Please provide email and password');
+  }
+
+  // Check for user
+  const user = await User.findOne({  email: email.toLowerCase()  }).select('+password +loginAttempts +lockUntil');
+
+  if (!user) {
+    res.status(401);
+    throw new Error('Invalid email or password');
+  }
+
+  // Check if account is active
+  if (!user.isActive) {
+    res.status(401);
+    throw new Error('Account is deactivated. Please contact support.');
+  }
+
+  // Check if account is locked
+  if (user.isLocked) {
+    const timeLeft = Math.ceil((user.lockUntil - Date.now()) / (1000 * 60));
+    res.status(423);
+    throw new Error(`Account is locked. Please try again in ${timeLeft} minutes.`);
+  }
+
+  // Check if password matches
+  const isMatch = await user.matchPassword(password);
+
+  if (!isMatch) {
+    // Increment login attempts
+    await user.incrementLoginAttempts();
+    
+    const attemptsLeft = 5 - (user.loginAttempts + 1);
+    
+    if (attemptsLeft > 0) {
+      res.status(401);
+      throw new Error(`Invalid email or password. ${attemptsLeft} attempts remaining.`);
+    } else {
+      res.status(401);
+      throw new Error('Account locked due to too many failed login attempts. Please try again in 15 minutes.');
+    }
+  }
+
+  // Reset login attempts on successful login
+  await user.resetLoginAttempts();
+
+  // Update last login
+  await user.updateLastLogin();
+
+  // Generate token with longer expiry for "remember me"
+  const tokenExpiry = rememberMe ? '30d' : '1d';
+  const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
+    expiresIn: tokenExpiry,
+  });
+
+  // Set cookie
+  setTokenCookie(res, token);
+
+  // Remove password from response
+  user.password = undefined;
+  user.loginAttempts = undefined;
+  user.lockUntil = undefined;
+
+  res.status(200).json({
+    success: true,
+    token,
+    user: {
       _id: user._id,
       name: user.name,
       email: user.email,
+      phone: user.phone,
+      isVerified: user.isVerified,
+      isAdmin: user.isAdmin,
+      avatar: user.avatar,
+      lastLogin: user.lastLogin,
+    },
+    message: 'Login successful!',
+  });
+});
+
+// @desc    Logout user
+// @route   POST /api/auth/logout
+// @access  Private
+const logout = asyncHandler(async (req, res) => {
+  res.cookie('jwt', 'none', {
+    expires: new Date(Date.now() + 10 * 1000), // 10 seconds
+    httpOnly: true,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Logged out successfully',
+  });
+});
+
+// @desc    Get current logged in user
+// @route   GET /api/auth/me
+// @access  Private
+const getMe = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id)
+    .populate('wishlist', 'name price images')
+    .populate('cart.product', 'name price images stock');
+
+  res.status(200).json({
+    success: true,
+    user: {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      avatar: user.avatar,
+      isVerified: user.isVerified,
       isAdmin: user.isAdmin,
       addresses: user.addresses,
       wishlist: user.wishlist,
       cart: user.cart,
-    });
-  } else {
-    res.status(404);
-    throw new Error('User not found');
-  }
+      createdAt: user.createdAt,
+      lastLogin: user.lastLogin,
+    },
+  });
 });
 
-// @desc    Update user profile
-// @route   PUT /api/users/profile
+// @desc    Update user details
+// @route   PUT /api/auth/updatedetails
 // @access  Private
-const updateUserProfile = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user._id);
+const updateDetails = asyncHandler(async (req, res) => {
+  const fieldsToUpdate = {
+    name: req.body.name,
+    phone: req.body.phone,
+    avatar: req.body.avatar,
+  };
 
-  if (user) {
-    user.name = req.body.name || user.name;
-    user.email = req.body.email || user.email;
-    user.phone = req.body.phone || user.phone;
-    
-    if (req.body.password) {
-      user.password = req.body.password;
+  // Remove undefined fields
+  Object.keys(fieldsToUpdate).forEach(
+    (key) => fieldsToUpdate[key] === undefined && delete fieldsToUpdate[key]
+  );
+
+  const user = await User.findByIdAndUpdate(
+    req.user._id,
+    fieldsToUpdate,
+    {
+      new: true,
+      runValidators: true,
     }
+  );
 
-    const updatedUser = await user.save();
-
-    res.json({
-      _id: updatedUser._id,
-      name: updatedUser.name,
-      email: updatedUser.email,
-      isAdmin: updatedUser.isAdmin,
-      token: generateToken(updatedUser._id),
-    });
-  } else {
-    res.status(404);
-    throw new Error('User not found');
-  }
+  res.status(200).json({
+    success: true,
+    user: {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      avatar: user.avatar,
+      isVerified: user.isVerified,
+      isAdmin: user.isAdmin,
+    },
+    message: 'Profile updated successfully',
+  });
 });
 
-// @desc    Add user address
-// @route   POST /api/users/address
+// @desc    Update password
+// @route   PUT /api/auth/updatepassword
 // @access  Private
-const addUserAddress = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user._id);
+const updatePassword = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id).select('+password');
 
-  if (user) {
-    const address = req.body;
-    
-    // If this is set as default, unset other defaults
-    if (address.isDefault) {
-      user.addresses.forEach(addr => addr.isDefault = false);
-    }
+  // Check current password
+  const isMatch = await user.matchPassword(req.body.currentPassword);
+  
+  if (!isMatch) {
+    res.status(401);
+    throw new Error('Current password is incorrect');
+  }
 
-    user.addresses.push(address);
+  // Update password
+  user.password = req.body.newPassword;
+  await user.save();
+
+  // Generate new token
+  const token = generateToken(user._id);
+  setTokenCookie(res, token);
+
+  res.status(200).json({
+    success: true,
+    token,
+    message: 'Password updated successfully',
+  });
+});
+
+// @desc    Forgot password
+// @route   POST /api/auth/forgotpassword
+// @access  Public
+const forgotPassword = asyncHandler(async (req, res) => {
+  const user = await User.findOne({ email: req.body.email });
+
+  if (!user) {
+    res.status(404);
+    throw new Error('No user found with this email');
+  }
+
+  // Check if there's a recent reset request (prevent spam)
+  if (user.resetPasswordExpire && user.resetPasswordExpire > Date.now()) {
+    const timeLeft = Math.ceil((user.resetPasswordExpire - Date.now()) / (1000 * 60));
+    res.status(429);
+    throw new Error(`Please wait ${timeLeft} minutes before requesting another password reset`);
+  }
+
+  // Get reset token
+  const resetToken = user.createPasswordResetToken();
+  await user.save();
+
+  // Create reset URL
+  const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+
+  // Send email
+  try {
+    await sendEmail({
+      email: user.email,
+      subject: 'Password Reset Request - Cosmetics Store',
+      template: 'passwordReset',
+      data: {
+        name: user.name,
+        resetUrl,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset email sent successfully',
+    });
+  } catch (error) {
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
     await user.save();
 
-    res.json(user.addresses);
-  } else {
-    res.status(404);
-    throw new Error('User not found');
+    res.status(500);
+    throw new Error('Email could not be sent. Please try again later.');
   }
 });
 
-// @desc    Update user address
-// @route   PUT /api/users/address/:id
+// @desc    Reset password
+// @route   PUT /api/auth/resetpassword/:resettoken
+// @access  Public
+const resetPassword = asyncHandler(async (req, res) => {
+  // Get hashed token
+  const resetPasswordToken = crypto
+    .createHash('sha256')
+    .update(req.params.resettoken)
+    .digest('hex');
+
+  const user = await User.findOne({
+    resetPasswordToken,
+    resetPasswordExpire: { $gt: Date.now() },
+  });
+
+  if (!user) {
+    res.status(400);
+    throw new Error('Invalid or expired reset token');
+  }
+
+  // Set new password
+  user.password = req.body.password;
+  user.resetPasswordToken = undefined;
+  user.resetPasswordExpire = undefined;
+  user.loginAttempts = 0; // Reset login attempts
+  user.lockUntil = undefined;
+  
+  await user.save();
+
+  // Generate new token (auto login after reset)
+  const token = generateToken(user._id);
+  setTokenCookie(res, token);
+
+  res.status(200).json({
+    success: true,
+    token,
+    message: 'Password reset successful',
+  });
+});
+
+// @desc    Delete account
+// @route   DELETE /api/auth/deleteaccount
 // @access  Private
-const updateUserAddress = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user._id);
-
-  if (user) {
-    const addressIndex = user.addresses.findIndex(
-      addr => addr._id.toString() === req.params.id
-    );
-
-    if (addressIndex > -1) {
-      const address = req.body;
-      
-      // If this is set as default, unset other defaults
-      if (address.isDefault) {
-        user.addresses.forEach(addr => addr.isDefault = false);
-      }
-
-      user.addresses[addressIndex] = {
-        ...user.addresses[addressIndex].toObject(),
-        ...address,
-      };
-
-      await user.save();
-      res.json(user.addresses);
-    } else {
-      res.status(404);
-      throw new Error('Address not found');
-    }
-  } else {
-    res.status(404);
-    throw new Error('User not found');
+const deleteAccount = asyncHandler(async (req, res) => {
+  const { password } = req.body;
+  
+  if (!password) {
+    res.status(400);
+    throw new Error('Please enter your password to confirm account deletion');
   }
-});
 
-// @desc    Delete user address
-// @route   DELETE /api/users/address/:id
-// @access  Private
-const deleteUserAddress = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user._id);
+  const user = await User.findById(req.user._id).select('+password');
 
-  if (user) {
-    user.addresses = user.addresses.filter(
-      addr => addr._id.toString() !== req.params.id
-    );
-    await user.save();
-    res.json(user.addresses);
-  } else {
-    res.status(404);
-    throw new Error('User not found');
+  // Verify password
+  const isMatch = await user.matchPassword(password);
+  
+  if (!isMatch) {
+    res.status(401);
+    throw new Error('Password is incorrect');
   }
+
+  // Soft delete (mark as inactive)
+  user.isActive = false;
+  await user.save();
+
+  // Clear cookie
+  res.cookie('jwt', 'none', {
+    expires: new Date(Date.now() + 10 * 1000),
+    httpOnly: true,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: 'Account deleted successfully',
+  });
 });
 
-// @desc    Add product to wishlist
-// @route   POST /api/users/wishlist/:productId
-// @access  Private
-const addToWishlist = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user._id);
 
-  if (user) {
-    if (!user.wishlist.includes(req.params.productId)) {
-      user.wishlist.push(req.params.productId);
-      await user.save();
-    }
-    res.json(user.wishlist);
-  } else {
-    res.status(404);
-    throw new Error('User not found');
+ const checkEmailAvailability = async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ available: false });
   }
-});
 
-// @desc    Remove product from wishlist
-// @route   DELETE /api/users/wishlist/:productId
-// @access  Private
-const removeFromWishlist = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user._id);
+  const user = await User.findOne({ email });
 
-  if (user) {
-    user.wishlist = user.wishlist.filter(
-      id => id.toString() !== req.params.productId
-    );
-    await user.save();
-    res.json(user.wishlist);
-  } else {
-    res.status(404);
-    throw new Error('User not found');
-  }
-});
+  res.status(200).json({
+    available: !user, 
+  });
+};
 
-// @desc    Get all users (admin only)
-// @route   GET /api/users
-// @access  Private/Admin
-const getUsers = asyncHandler(async (req, res) => {
-  const users = await User.find({}).select('-password');
-  res.json(users);
-});
-
-// @desc    Delete user (admin only)
-// @route   DELETE /api/users/:id
-// @access  Private/Admin
-const deleteUser = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.params.id);
-
-  if (user) {
-    await user.deleteOne();
-    res.json({ message: 'User removed' });
-  } else {
-    res.status(404);
-    throw new Error('User not found');
-  }
-});
-
-// @desc    Get user by ID (admin only)
-// @route   GET /api/users/:id
-// @access  Private/Admin
-const getUserById = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.params.id).select('-password');
-
-  if (user) {
-    res.json(user);
-  } else {
-    res.status(404);
-    throw new Error('User not found');
-  }
-});
-
-// @desc    Update user (admin only)
-// @route   PUT /api/users/:id
-// @access  Private/Admin
-const updateUser = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.params.id);
-
-  if (user) {
-    user.name = req.body.name || user.name;
-    user.email = req.body.email || user.email;
-    user.isAdmin = req.body.isAdmin !== undefined ? req.body.isAdmin : user.isAdmin;
-
-    const updatedUser = await user.save();
-
-    res.json({
-      _id: updatedUser._id,
-      name: updatedUser.name,
-      email: updatedUser.email,
-      isAdmin: updatedUser.isAdmin,
-    });
-  } else {
-    res.status(404);
-    throw new Error('User not found');
-  }
-});
 
 export {
-  authUser,
-  registerUser,
-  getUserProfile,
-  updateUserProfile,
-  addUserAddress,
-  updateUserAddress,
-  deleteUserAddress,
-  addToWishlist,
-  removeFromWishlist,
-  getUsers,
-  deleteUser,
-  getUserById,
-  updateUser,
+  register,
+  verifyEmail,
+  resendVerificationEmail,
+  login,
+  logout,
+  getMe,
+  updateDetails,
+  updatePassword,
+  forgotPassword,
+  resetPassword,
+  deleteAccount,
+  checkEmailAvailability,
 };
+

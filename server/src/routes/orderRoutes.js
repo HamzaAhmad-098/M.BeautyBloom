@@ -11,12 +11,12 @@ import {
   cancelOrder,
   getOrderStats,
 } from '../controllers/orderController.js';
-import { protect, admin, guestCheckout } from '../middleware/authMiddleware.js';
+import { protect, admin, guest } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 router.route('/')
-  .post(guestCheckout, addOrderItems)
+  .post(guest, addOrderItems)
   .get(protect, admin, getOrders);
 
 router.route('/myorders')
@@ -41,6 +41,6 @@ router.route('/:id/status')
   .put(protect, admin, updateOrderStatus);
 
 router.route('/:id/cancel')
-  .put(guestCheckout, cancelOrder);
+  .put(guest, cancelOrder);
 
 export default router;

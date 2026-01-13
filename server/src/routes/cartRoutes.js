@@ -7,13 +7,13 @@ import {
   clearCart,
   syncCart,
 } from '../controllers/cartController.js';
-import { protect, guestCheckout } from '../middleware/authMiddleware.js';
+import { protect, guest } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 router.route('/')
-  .get(guestCheckout, getCart)
-  .post(guestCheckout, addToCart)
+  .get(guest, getCart)
+  .post(guest, addToCart)
   .delete(protect, clearCart);
 
 router.route('/sync')
