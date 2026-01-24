@@ -33,110 +33,53 @@ const reviewSchema = mongoose.Schema(
 
 const productSchema = mongoose.Schema(
   {
-    name: {
-      type: String,
-      required: true,
-    },
-    brand: {
-      type: String,
-      required: true,
-    },
+    name: { type: String, required: true },
+    brand: { type: String, required: true },
     category: {
       type: String,
       required: true,
       enum: ['Skincare', 'Makeup', 'Haircare', 'Fragrance', 'Bath & Body', 'Tools & Brushes'],
     },
-    subCategory: {
-      type: String,
-    },
-    price: {
-      type: Number,
-      required: true,
-      default: 0,
-    },
-    discountPrice: {
-      type: Number,
-      default: 0,
-    },
-    actualPrice: {
-      type: Number,
-      default: function() {
-        return this.discountPrice > 0 ? this.discountPrice : this.price;
+    subCategory: { type: String },
+    price: { type: Number, required: true, default: 0 },
+    discountPrice: { type: Number },
+    countInStock: { type: Number, default: 0 },
+    stock: { type: Number, default: 0 },
+    sold: { type: Number, default: 0 },
+    description: { type: String },
+
+    // images array to support multiple images stored on Cloudinary
+    images: [
+      {
+        url: { type: String, required: true },
+        public_id: { type: String, required: true },
+        alt: { type: String },
       },
-    },
-    images: [{
-      type: String,
-      required: true,
-    }],
-    description: {
-      type: String,
-      required: true,
-    },
-    ingredients: {
-      type: String,
-    },
-    howToUse: {
-      type: String,
-    },
-    benefits: [{
-      type: String,
-    }],
-    skinType: {
-      type: [String],
-      enum: ['Oily', 'Dry', 'Combination', 'Sensitive', 'Normal', 'All'],
-    },
-    stock: {
-      type: Number,
-      required: true,
-      default: 0,
-    },
-    sold: {
-      type: Number,
-      default: 0,
-    },
-    rating: {
-      type: Number,
-      default: 0,
-    },
-    numReviews: {
-      type: Number,
-      default: 0,
-    },
+    ],
+
+    numReviews: { type: Number, default: 0 },
+    rating: { type: Number, default: 0 },
     reviews: [reviewSchema],
-    tags: [{
-      type: String,
-    }],
-    isFeatured: {
-      type: Boolean,
-      default: false,
-    },
-    isNew: {
-      type: Boolean,
-      default: true,
-    },
-    variants: [{
-      name: String,
-      price: Number,
-      stock: Number,
-      sku: String,
-    }],
-    weight: {
-      type: String,
-    },
-    expiryDate: {
-      type: Date,
-    },
+    tags: [{ type: String }],
+    isFeatured: { type: Boolean, default: false },
+    isNew: { type: Boolean, default: true },
+    variants: [{ name: String, price: Number, stock: Number, sku: String }],
+    weight: { type: String },
+    expiryDate: { type: Date },
   },
   {
     timestamps: true,
   }
 );
 
-// Calculate rating before saving reviews
-productSchema.pre('save', function(next) {
-  if (this.reviews.length > 0) {
-    this.rating = this.reviews.reduce((acc, item) => item.rating + acc, 0) / this.reviews.length;
+// Recalculate rating and numReviews on save
+productSchema.pre('save', function (next) {
+  if (this.reviews && this.reviews.length > 0) {
     this.numReviews = this.reviews.length;
+    this.rating = this.reviews.reduce((acc, item) => item.rating + acc, 0) / this.reviews.length;
+  } else {
+    this.numReviews = 0;
+    this.rating = 0;
   }
   next();
 });
