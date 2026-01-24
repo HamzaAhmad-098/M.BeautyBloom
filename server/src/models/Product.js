@@ -48,8 +48,7 @@ const productSchema = mongoose.Schema(
     sold: { type: Number, default: 0 },
     description: { type: String },
 
-    // images array to support multiple images stored on Cloudinary
-    // url and public_id are optional so product saves won't fail if missing
+    // images array (optional, safe for product creation)
     images: {
       type: [
         {
@@ -80,7 +79,9 @@ const productSchema = mongoose.Schema(
 productSchema.pre('save', function (next) {
   if (this.reviews && this.reviews.length > 0) {
     this.numReviews = this.reviews.length;
-    this.rating = this.reviews.reduce((acc, item) => item.rating + acc, 0) / this.reviews.length;
+    this.rating =
+      this.reviews.reduce((acc, item) => item.rating + acc, 0) /
+      this.reviews.length;
   } else {
     this.numReviews = 0;
     this.rating = 0;
