@@ -39,6 +39,10 @@ const getProductById = asyncHandler(async (req, res) => {
 
 // @desc    Create a product
 // @route   POST /api/products
+// Replace the existing createProduct handler with the following:
+
+// @desc    Create a product
+// @route   POST /api/products
 // @access  Private/Admin
 const createProduct = asyncHandler(async (req, res) => {
   if (!req.user || !req.user._id) {
@@ -46,19 +50,93 @@ const createProduct = asyncHandler(async (req, res) => {
     throw new Error('Not authorized');
   }
 
-  const product = new Product({
+  // Accept product data from client if provided
+  const {
+    name,
+    price,
+    description,
+    images,
+    brand,
+    category,
+    countInStock,
+    discountPrice,
+    isFeatured,
+    isNew,
+    variants,
+    subCategory,
+    tags,
+    weight,
+    expiryDate,
+  } = req.body || {};
+
+  // Helper to normalize images field (client may send JSON string or array)
+  const parseImages = (imagesInput) => {
+    if (!imagesInput) return [];
+    if (typeof imagesInput === 'string') {
+      try {
+        return JSON.parse(imagesInput);
+      } catch (err) {
+        // maybe comma separated string of urls
+        return imagesInput.split(',').map((u) => ({ url: u.trim(), public_id: '' })).filter(Boolean);
+      }
+    }
+    if (Array.isArray(imagesInput)) {
+      return imagesInput.map((i) => {
+        if (typeof i === 'string') return { url: i, public_id: '' };
+        return { url: i.url || i.secure_url || '', public_id: i.public_id || i.publicId || '' };
+      });
+    }
+    return [];
+  };
+
+  // If the admin provided meaningful data, create product from that payload
+  const hasClientData = name || price || brand || category || (images && images.length);
+
+  if (hasClientData) {
+    // validate minimal required fields
+    if (!name || !price || !brand || !category) {
+      res.status(400);
+      throw new Error('name, price, brand and category are required to create a product');
+    }
+
+    const product = new Product({
+      name,
+      price: Number(price),
+      user: req.user._id,
+      images: parseImages(images),
+      brand,
+      category,
+      subCategory,
+      countInStock: countInStock !== undefined ? Number(countInStock) : 0,
+      discountPrice: discountPrice !== undefined ? Number(discountPrice) : undefined,
+      isFeatured: !!isFeatured,
+      isNew: isNew !== undefined ? !!isNew : true,
+      variants: variants || [],
+      tags: tags || [],
+      description: description || '',
+      weight,
+      expiryDate,
+    });
+
+    const createdProduct = await product.save();
+    res.status(201).json(createdProduct);
+    return;
+  }
+
+  // Fallback: keep the old admin quick-create behavior for UI flows that expect it
+  const sampleProduct = new Product({
     name: 'Sample name',
     price: 0,
     user: req.user._id,
-    images: [], // empty array to avoid validation issues
+    images: [], // empty array to avoid validation problems
     brand: 'Sample brand',
-    category: 'Skincare', // valid enum default
+    category: 'Skincare',
     countInStock: 0,
     numReviews: 0,
     description: 'Sample description',
   });
 
-  const createdProduct = await product.save();
+  const createdProduct = await sampleProduct.save();
   res.status(201).json(createdProduct);
 });
 

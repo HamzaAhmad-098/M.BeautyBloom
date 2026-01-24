@@ -1,76 +1,33 @@
 import express from 'express';
-import multer from 'multer';
-import path from 'path';
+import asyncHandler from 'express-async-handler';
 import { protect, admin } from '../middleware/authMiddleware.js';
+import { upload, uploadToCloudinary } from '../config/cloudinary.js';
 
 const router = express.Router();
 
-// Configure multer storage
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/');
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, `${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`);
-  },
-});
+// Admin image upload route (Cloudinary)
+router.post(
+  '/admin/upload/images',
+  protect,
+  admin,
+  upload.array('images', 5),
+  asyncHandler(async (req, res) => {
+    if (!req.files || !req.files.length) {
+      return res.status(400).json({ message: 'No files provided' });
+    }
 
-// File filter
-const fileFilter = (req, file, cb) => {
-  const filetypes = /jpe?g|png|webp/;
-  const mimetypes = /image\/jpe?g|image\/png|image\/webp/;
+    // upload each buffer to Cloudinary
+    const uploaded = await Promise.all(
+      req.files.map((file) => uploadToCloudinary(file.buffer))
+    );
 
-  const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = mimetypes.test(file.mimetype);
+    const images = uploaded.map((u) => ({
+      url: u.secure_url || u.url,
+      public_id: u.public_id,
+    }));
 
-  if (extname && mimetype) {
-    cb(null, true);
-  } else {
-    cb(new Error('Images only!'), false);
-  }
-};
-
-const upload = multer({ 
-  storage, 
-  fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB
-});
-
-// @desc    Upload image
-// @route   POST /api/upload
-// @access  Private/Admin
-router.post('/', protect, admin, upload.single('image'), (req, res) => {
-  try {
-    res.status(200).json({
-      success: true,
-      image: `/uploads/${req.file.filename}`,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: 'Image upload failed',
-    });
-  }
-});
-
-// @desc    Upload multiple images
-// @route   POST /api/upload/multiple
-// @access  Private/Admin
-router.post('/multiple', protect, admin, upload.array('images', 10), (req, res) => {
-  try {
-    const images = req.files.map(file => `/uploads/${file.filename}`);
-    
-    res.status(200).json({
-      success: true,
-      images,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: 'Images upload failed',
-    });
-  }
-});
+    res.json(images);
+  })
+);
 
 export default router;
