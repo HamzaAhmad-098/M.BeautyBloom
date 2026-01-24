@@ -15,12 +15,20 @@ import {
   checkEmailAvailability,
 } from '../controllers/authController.js';
 import {
+  getUsers,
+  getUserById,
+  updateUser,
+  deleteUser,
+} from '../controllers/userController.js';
+import {
   protect,
+  authorize,
   admin,
   verified,
   authLimiter,
   refreshToken,
 } from '../middleware/authMiddleware.js';
+import User from '../models/User.js'; // Add this import
 
 const router = express.Router();
 
@@ -61,13 +69,51 @@ router.put('/updatedetails', updateDetails);
 router.put('/updatepassword', updatePassword);
 router.post('/resend-verification', resendVerificationEmail);
 router.delete('/deleteaccount', deleteAccount);
-router.post('/check-email', checkEmailAvailability);
-// Admin routes
+
+// ---------- ADMIN ROUTES ----------
+// All routes below this will require admin privileges
 router.use(admin);
 
-// Example admin-only routes
-router.get('/admin/users', async (req, res) => {
-  // Get all users logic
+// Admin user management
+router.get('/admin/users', getUsers);
+router.get('/admin/users/:id', getUserById);
+router.put('/admin/users/:id', updateUser);
+router.delete('/admin/users/:id', deleteUser);
+
+// Admin dashboard stats
+router.get('/admin/stats', async (req, res) => {
+  try {
+    // Get user counts by role/status
+    const totalUsers = await User.countDocuments();
+    const verifiedUsers = await User.countDocuments({ isVerified: true });
+    const adminUsers = await User.countDocuments({ isAdmin: true });
+    const activeUsers = await User.countDocuments({ isActive: true });
+
+    // Get recent registrations
+    const recentUsers = await User.find()
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .select('name email createdAt isVerified isAdmin');
+
+    res.status(200).json({
+      success: true,
+      data: {
+        counts: {
+          totalUsers,
+          verifiedUsers,
+          adminUsers,
+          activeUsers,
+        },
+        recentUsers,
+      },
+    });
+  } catch (error) {
+    console.error('Admin stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching admin stats',
+    });
+  }
 });
 
 export default router;

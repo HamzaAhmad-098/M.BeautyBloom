@@ -22,6 +22,7 @@ import uploadRoutes from './routes/uploadRoutes.js';
 import categoryRoutes from './routes/categoryRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import authRoutes from './routes/authRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -41,15 +42,12 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
-// Remove XSS middleware for now - we'll implement our own
-// app.use(xss());
-
 app.use(mongoSanitize());
 
-// CORS configuration
+// Enhanced CORS configuration
 const allowedOrigins = process.env.NODE_ENV === 'production' 
-  ? [process.env.FRONTEND_URL, 'http://localhost:3000']
-  : ['http://localhost:3000'];
+  ? [process.env.FRONTEND_URL, 'http://localhost:3000', 'https://localhost:3000']
+  : ['http://localhost:3000', 'https://localhost:3000', 'http://localhost:5173', 'https://localhost:5173'];
 
 app.use(cors({
   origin: function (origin, callback) {
@@ -57,6 +55,10 @@ app.use(cors({
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.indexOf(origin) === -1) {
+      // Only log in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('CORS blocked origin:', origin);
+      }
       const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
       return callback(new Error(msg), false);
     }
@@ -64,7 +66,8 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept', 'Cookie', 'Set-Cookie'],
+  exposedHeaders: ['Set-Cookie']
 }));
 
 // Handle preflight requests
@@ -136,6 +139,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -162,6 +166,7 @@ app.get('/api', (req, res) => {
       categories: '/api/categories',
       upload: '/api/upload',
       payment: '/api/payment',
+      auth: '/api/auth',
     },
     documentation: 'Coming soon...',
   });
@@ -186,6 +191,10 @@ if (process.env.NODE_ENV === 'production') {
       frontend: 'http://localhost:3000',
       api: 'http://localhost:5000/api',
       health: 'http://localhost:5000/api/health',
+      admin_routes: {
+        users: 'GET /api/auth/admin/users',
+        stats: 'GET /api/auth/admin/stats',
+      }
     });
   });
 }

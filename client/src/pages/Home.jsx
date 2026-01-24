@@ -6,7 +6,7 @@ const Home = () => {
       {/* Hero Section */}
       <div className="relative bg-gradient-to-r from-primary-500 to-primary-700 text-white py-20">
         <div className="max-w-7xl mx-auto px-4 text-center">
-          <h1 className="text-5xl font-bold mb-6">Premium Cosmetics Store</h1>
+          <h1 className="text-5xl font-bold mb-6">M.BeautyBloom</h1>
           <p className="text-xl mb-8 max-w-2xl mx-auto">
             Discover the finest beauty products for your skincare, makeup, and haircare needs
           </p>

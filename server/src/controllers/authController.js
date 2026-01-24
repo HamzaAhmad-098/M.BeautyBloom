@@ -237,7 +237,7 @@ const login = asyncHandler(async (req, res) => {
 
   // Reset login attempts on successful login
   await user.resetLoginAttempts();
-
+console.log('User logging in:', user.email, 'isAdmin:', user.isAdmin);
   // Update last login
   await user.updateLastLogin();
 

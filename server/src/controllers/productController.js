@@ -1,114 +1,29 @@
 import asyncHandler from 'express-async-handler';
 import Product from '../models/Product.js';
+import cloudinary from '../config/cloudinary.js';
 
-// @desc    Fetch all products with filtering
+// @desc    Get products (paginated & filterable)
 // @route   GET /api/products
 // @access  Public
 const getProducts = asyncHandler(async (req, res) => {
   const pageSize = 12;
   const page = Number(req.query.pageNumber) || 1;
-
   const keyword = req.query.keyword
     ? {
-        name: {
-          $regex: req.query.keyword,
-          $options: 'i',
-        },
+        name: { $regex: req.query.keyword, $options: 'i' },
       }
     : {};
 
-  const categoryFilter = req.query.category
-    ? { category: req.query.category }
-    : {};
-
-  const brandFilter = req.query.brand
-    ? { brand: { $in: req.query.brand.split(',') } }
-    : {};
-
-  const skinTypeFilter = req.query.skinType
-    ? { skinType: { $in: req.query.skinType.split(',') } }
-    : {};
-
-  const priceFilter = {};
-  if (req.query.minPrice || req.query.maxPrice) {
-    priceFilter.actualPrice = {};
-    if (req.query.minPrice) {
-      priceFilter.actualPrice.$gte = Number(req.query.minPrice);
-    }
-    if (req.query.maxPrice) {
-      priceFilter.actualPrice.$lte = Number(req.query.maxPrice);
-    }
-  }
-
-  const ratingFilter = req.query.rating
-    ? { rating: { $gte: Number(req.query.rating) } }
-    : {};
-
-  const isFeaturedFilter = req.query.featured
-    ? { isFeatured: true }
-    : {};
-
-  const isNewFilter = req.query.new
-    ? { isNew: true }
-    : {};
-
-  const sort = {};
-  if (req.query.sort) {
-    switch (req.query.sort) {
-      case 'price-low':
-        sort.actualPrice = 1;
-        break;
-      case 'price-high':
-        sort.actualPrice = -1;
-        break;
-      case 'rating':
-        sort.rating = -1;
-        break;
-      case 'newest':
-        sort.createdAt = -1;
-        break;
-      case 'popular':
-        sort.sold = -1;
-        break;
-      default:
-        sort.createdAt = -1;
-    }
-  }
-
-  const count = await Product.countDocuments({
-    ...keyword,
-    ...categoryFilter,
-    ...brandFilter,
-    ...skinTypeFilter,
-    ...priceFilter,
-    ...ratingFilter,
-    ...isFeaturedFilter,
-    ...isNewFilter,
-  });
-
-  const products = await Product.find({
-    ...keyword,
-    ...categoryFilter,
-    ...brandFilter,
-    ...skinTypeFilter,
-    ...priceFilter,
-    ...ratingFilter,
-    ...isFeaturedFilter,
-    ...isNewFilter,
-  })
-    .sort(sort)
+  const count = await Product.countDocuments({ ...keyword });
+  const products = await Product.find({ ...keyword })
     .limit(pageSize)
-    .skip(pageSize * (page - 1));
+    .skip(pageSize * (page - 1))
+    .sort({ createdAt: -1 });
 
-  res.json({
-    products,
-    page,
-    pages: Math.ceil(count / pageSize),
-    total: count,
-  });
+  res.json({ products, page, pages: Math.ceil(count / pageSize) });
 });
 
-// @desc    Fetch single product
+// @desc    Get product by ID
 // @route   GET /api/products/:id
 // @access  Public
 const getProductById = asyncHandler(async (req, res) => {
@@ -126,13 +41,18 @@ const getProductById = asyncHandler(async (req, res) => {
 // @route   POST /api/products
 // @access  Private/Admin
 const createProduct = asyncHandler(async (req, res) => {
+  if (!req.user || !req.user._id) {
+    res.status(401);
+    throw new Error('Not authorized');
+  }
+
   const product = new Product({
     name: 'Sample name',
     price: 0,
     user: req.user._id,
-    image: '/images/sample.jpg',
+    images: [], // empty array to avoid validation issues
     brand: 'Sample brand',
-    category: 'Sample category',
+    category: 'Skincare', // valid enum default
     countInStock: 0,
     numReviews: 0,
     description: 'Sample description',
@@ -153,15 +73,13 @@ const updateProduct = asyncHandler(async (req, res) => {
     images,
     brand,
     category,
-    stock,
+    countInStock,
     discountPrice,
     isFeatured,
     isNew,
     variants,
-    skinType,
-    ingredients,
-    howToUse,
-    benefits,
+    subCategory,
+    tags,
     weight,
     expiryDate,
   } = req.body;
@@ -169,24 +87,39 @@ const updateProduct = asyncHandler(async (req, res) => {
   const product = await Product.findById(req.params.id);
 
   if (product) {
-    product.name = name;
-    product.price = price;
-    product.description = description;
-    product.images = images;
-    product.brand = brand;
-    product.category = category;
-    product.stock = stock;
-    product.discountPrice = discountPrice;
-    product.actualPrice = discountPrice > 0 ? discountPrice : price;
-    product.isFeatured = isFeatured;
-    product.isNew = isNew;
-    product.variants = variants;
-    product.skinType = skinType;
-    product.ingredients = ingredients;
-    product.howToUse = howToUse;
-    product.benefits = benefits;
-    product.weight = weight;
-    product.expiryDate = expiryDate;
+    product.name = name || product.name;
+    product.price = price !== undefined ? price : product.price;
+    product.description = description || product.description;
+    product.brand = brand || product.brand;
+    product.category = category || product.category;
+    product.subCategory = subCategory || product.subCategory;
+    product.countInStock = countInStock !== undefined ? countInStock : product.countInStock;
+    product.discountPrice = discountPrice !== undefined ? discountPrice : product.discountPrice;
+    product.isFeatured = isFeatured !== undefined ? !!isFeatured : product.isFeatured;
+    product.isNew = isNew !== undefined ? !!isNew : product.isNew;
+    product.variants = variants || product.variants;
+    product.tags = tags || product.tags;
+    product.weight = weight || product.weight;
+    product.expiryDate = expiryDate || product.expiryDate;
+
+    // If images present in request, replace them. Expect format: [{ url, public_id, alt }]
+    if (images && Array.isArray(images)) {
+      const currentPublicIds = (product.images || []).map((i) => i.public_id).filter(Boolean);
+      const newPublicIds = images.map((i) => i.public_id).filter(Boolean);
+
+      // delete images that are not present in newPublicIds
+      const toDelete = currentPublicIds.filter((id) => id && !newPublicIds.includes(id));
+      for (const pid of toDelete) {
+        try {
+          await cloudinary.uploader.destroy(pid, { resource_type: 'image' });
+        } catch (err) {
+          // log and continue
+          console.error('Cloudinary delete error', pid, err.message || err);
+        }
+      }
+
+      product.images = images.map((i) => ({ url: i.url, public_id: i.public_id || '', alt: i.alt || '' }));
+    }
 
     const updatedProduct = await product.save();
     res.json(updatedProduct);
@@ -203,6 +136,19 @@ const deleteProduct = asyncHandler(async (req, res) => {
   const product = await Product.findById(req.params.id);
 
   if (product) {
+    // delete images from Cloudinary (if public_id present)
+    if (product.images && product.images.length) {
+      for (const img of product.images) {
+        if (img.public_id) {
+          try {
+            await cloudinary.uploader.destroy(img.public_id, { resource_type: 'image' });
+          } catch (err) {
+            console.error('Cloudinary delete error', img.public_id, err.message || err);
+          }
+        }
+      }
+    }
+
     await product.deleteOne();
     res.json({ message: 'Product removed' });
   } else {
@@ -220,9 +166,7 @@ const createProductReview = asyncHandler(async (req, res) => {
   const product = await Product.findById(req.params.id);
 
   if (product) {
-    const alreadyReviewed = product.reviews.find(
-      (r) => r.user.toString() === req.user._id.toString()
-    );
+    const alreadyReviewed = product.reviews.find((r) => r.user.toString() === req.user._id.toString());
 
     if (alreadyReviewed) {
       res.status(400);
@@ -234,15 +178,13 @@ const createProductReview = asyncHandler(async (req, res) => {
       rating: Number(rating),
       comment,
       user: req.user._id,
+      verifiedPurchase: false,
     };
 
     product.reviews.push(review);
 
     product.numReviews = product.reviews.length;
-
-    product.rating =
-      product.reviews.reduce((acc, item) => item.rating + acc, 0) /
-      product.reviews.length;
+    product.rating = product.reviews.reduce((acc, item) => item.rating + acc, 0) / product.reviews.length;
 
     await product.save();
     res.status(201).json({ message: 'Review added' });
@@ -252,12 +194,40 @@ const createProductReview = asyncHandler(async (req, res) => {
   }
 });
 
+// @desc    Delete a review (Admin)
+// @route   DELETE /api/products/:id/reviews/:reviewId
+// @access  Private/Admin
+const deleteProductReview = asyncHandler(async (req, res) => {
+  const { id, reviewId } = req.params;
+  const product = await Product.findById(id);
+
+  if (!product) {
+    res.status(404);
+    throw new Error('Product not found');
+  }
+
+  const initialLen = product.reviews.length;
+  product.reviews = product.reviews.filter((r) => r._id.toString() !== reviewId.toString());
+
+  if (product.reviews.length === initialLen) {
+    res.status(404);
+    throw new Error('Review not found');
+  }
+
+  product.numReviews = product.reviews.length;
+  product.rating = product.reviews.length
+    ? product.reviews.reduce((acc, item) => item.rating + acc, 0) / product.reviews.length
+    : 0;
+
+  await product.save();
+  res.json({ message: 'Review removed' });
+});
+
 // @desc    Get top rated products
 // @route   GET /api/products/top
 // @access  Public
 const getTopProducts = asyncHandler(async (req, res) => {
   const products = await Product.find({}).sort({ rating: -1 }).limit(5);
-
   res.json(products);
 });
 
@@ -266,7 +236,6 @@ const getTopProducts = asyncHandler(async (req, res) => {
 // @access  Public
 const getFeaturedProducts = asyncHandler(async (req, res) => {
   const products = await Product.find({ isFeatured: true }).limit(8);
-
   res.json(products);
 });
 
@@ -274,10 +243,7 @@ const getFeaturedProducts = asyncHandler(async (req, res) => {
 // @route   GET /api/products/new
 // @access  Public
 const getNewProducts = asyncHandler(async (req, res) => {
-  const products = await Product.find({ isNew: true })
-    .sort({ createdAt: -1 })
-    .limit(8);
-
+  const products = await Product.find({ isNew: true }).sort({ createdAt: -1 }).limit(8);
   res.json(products);
 });
 
@@ -323,6 +289,7 @@ export {
   updateProduct,
   deleteProduct,
   createProductReview,
+  deleteProductReview,
   getTopProducts,
   getFeaturedProducts,
   getNewProducts,

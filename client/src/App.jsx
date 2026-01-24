@@ -1,7 +1,8 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { getMe } from './store/slices/authSlice';
+import { selectCurrentUser, selectIsAuthenticated } from './store/slices/authSlice';
 
 // Layout
 import Layout from './components/layout/Layout';
@@ -15,12 +16,14 @@ import Shop from './pages/Shop';
 import ProductDetails from './pages/ProductDetails';
 import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
+import OrderConfirmation from './pages/OrderConfirmation';
 import About from './pages/About';
 import Contact from './pages/Contact';
 import FAQ from './pages/FAQ';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import Terms from './pages/Terms';
 import NotFound from './pages/NotFound';
+import TrackOrder from './pages/TrackOrder';
 
 // Auth Pages
 import Login from './pages/Login';
@@ -44,9 +47,15 @@ import AdminOrders from './pages/admin/Orders';
 import AdminUsers from './pages/admin/Users';
 import AdminCategories from './pages/admin/Categories';
 
+// Import Product CRUD Components
+import ProductForm from './pages/admin/ProductForm';
+import ProductDetail from './pages/admin/ProductDetail';
+
 function App() {
   const dispatch = useDispatch();
-  const { isAuthenticated } = useSelector((state) => state.auth);
+  const navigate = useNavigate();
+  const userInfo = useSelector(selectCurrentUser);
+  const isAuthenticated = useSelector(selectIsAuthenticated);
 
   // Check authentication on app load
   useEffect(() => {
@@ -55,6 +64,14 @@ function App() {
       dispatch(getMe());
     }
   }, [dispatch, isAuthenticated]);
+
+  // Auto-redirect admin from homepage to admin dashboard
+  useEffect(() => {
+    if (isAuthenticated && userInfo?.isAdmin && window.location.pathname === '/') {
+      console.log('Auto-redirecting admin from homepage to admin dashboard');
+      navigate('/admin/dashboard');
+    }
+  }, [isAuthenticated, userInfo, navigate]);
 
   return (
     <Routes>
@@ -69,6 +86,11 @@ function App() {
         <Route path="faq" element={<FAQ />} />
         <Route path="privacy" element={<PrivacyPolicy />} />
         <Route path="terms" element={<Terms />} />
+        <Route path="checkout" element={<Checkout />} />
+        <Route path="order-confirmation/:orderId" element={<OrderConfirmation />} />
+		<Route path="order-confirmation/:id" element={<OrderConfirmation />} />
+		<Route path="track-order" element={<TrackOrder />} />
+		<Route path="track-order/:id" element={<TrackOrder />} />
         
         {/* Auth Routes (Guest only) */}
         <Route path="login" element={
@@ -101,7 +123,7 @@ function App() {
           </ProtectedRoute>
         } />
         
-        {/* User Routes */}
+        {/* User Routes (Regular users only) */}
         <Route path="profile" element={
           <ProtectedRoute>
             <Profile />
@@ -133,17 +155,35 @@ function App() {
           </ProtectedRoute>
         } />
         
-        {/* Admin Routes */}
-        <Route path="admin" element={
+        {/* Admin Routes (Admin users only) */}
+        <Route path="admin/dashboard" element={
           <AdminRoute>
             <AdminDashboard />
           </AdminRoute>
         } />
+        
+        {/* Product Management CRUD Routes */}
         <Route path="admin/products" element={
           <AdminRoute>
             <AdminProducts />
           </AdminRoute>
         } />
+        <Route path="admin/products/new" element={
+          <AdminRoute>
+            <ProductForm mode="create" />
+          </AdminRoute>
+        } />
+        <Route path="admin/products/:id" element={
+          <AdminRoute>
+            <ProductDetail />
+          </AdminRoute>
+        } />
+        <Route path="admin/products/edit/:id" element={
+          <AdminRoute>
+            <ProductForm mode="edit" />
+          </AdminRoute>
+        } />
+        
         <Route path="admin/orders" element={
           <AdminRoute>
             <AdminOrders />

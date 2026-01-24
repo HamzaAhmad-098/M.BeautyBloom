@@ -17,7 +17,7 @@ const Navbar = () => {
             </div>
             <div>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent">
-                Cosmetics
+                M.BeautyBloom
               </h1>
               <p className="text-xs text-gray-500 -mt-1">Beauty Store</p>
             </div>

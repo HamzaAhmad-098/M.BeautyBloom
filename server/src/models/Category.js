@@ -4,13 +4,9 @@ const categorySchema = mongoose.Schema(
   {
     name: {
       type: String,
-      required: true,
+      required: [true, 'Category name is required'],
       unique: true,
-    },
-    slug: {
-      type: String,
-      required: true,
-      unique: true,
+      trim: true,
     },
     description: {
       type: String,
@@ -18,17 +14,13 @@ const categorySchema = mongoose.Schema(
     image: {
       type: String,
     },
-    parentCategory: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Category',
-    },
     isActive: {
       type: Boolean,
       default: true,
     },
-    order: {
-      type: Number,
-      default: 0,
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
     },
   },
   {
@@ -36,5 +28,9 @@ const categorySchema = mongoose.Schema(
   }
 );
 
+// Add text index for search
+categorySchema.index({ name: 'text', description: 'text' });
+
 const Category = mongoose.model('Category', categorySchema);
+
 export default Category;

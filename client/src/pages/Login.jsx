@@ -1,27 +1,49 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { login } from '../store/slices/authSlice';
+import { selectCurrentUser, selectIsAuthenticated } from '../store/slices/authSlice';
 import { FaEnvelope, FaLock, FaEye, FaEyeSlash } from 'react-icons/fa';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
+  
+  // Use the correct selectors
+  const userInfo = useSelector(selectCurrentUser);
+  const isAuthenticated = useSelector(selectIsAuthenticated);
   const { loading, error } = useSelector((state) => state.auth);
 
   const redirect = location.search ? location.search.split('=')[1] : '/';
 
+  // Add useEffect to check for admin redirection after login
+  useEffect(() => {
+    if (isAuthenticated && userInfo) {
+      // Check if user is admin and redirect accordingly
+      console.log('User authenticated:', userInfo);
+      console.log('Is admin?', userInfo.isAdmin);
+      
+      if (userInfo.isAdmin) {
+        console.log('Admin user detected, redirecting to admin dashboard');
+        navigate('/admin/dashboard');
+      } else {
+        console.log('Regular user, redirecting to:', redirect);
+        navigate(redirect);
+      }
+    }
+  }, [isAuthenticated, userInfo, navigate, redirect]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const result = await dispatch(login({ email, password }));
-    if (login.fulfilled.match(result)) {
-      navigate(redirect);
-    }
+    console.log('Logging in...');
+    await dispatch(login({ email, password, rememberMe }));
+    // The useEffect above will handle the redirection
   };
 
   return (
@@ -109,6 +131,8 @@ const Login = () => {
                 <input
                   type="checkbox"
                   id="remember"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
                   className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                 />
                 <label htmlFor="remember" className="ml-2 text-sm text-gray-600">

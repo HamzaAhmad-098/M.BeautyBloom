@@ -50,9 +50,16 @@ const addOrderItems = asyncHandler(async (req, res) => {
   // Update product stock
   for (const item of orderItems) {
     const product = await Product.findById(item.product);
-    product.stock -= item.quantity;
-    product.sold += item.quantity;
-    await product.save();
+    if (product) {
+      product.stock = (product.stock || 0) - item.quantity;
+      product.sold = (product.sold || 0) + item.quantity;
+      try {
+        await product.save();
+      } catch (err) {
+        // Log the error but don't abort order creation
+        console.error(`Failed to update stock for product ${product._id}:`, err.message || err);
+      }
+    }
   }
 
   const createdOrder = await order.save();
