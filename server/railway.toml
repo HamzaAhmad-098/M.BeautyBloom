@@ -1,0 +1,13 @@
+[build]
+builder = "nixpacks"
+buildCommand = "npm install"
+startCommand = "npm start"
+
+[deploy]
+numReplicas = 1
+healthcheckPath = "/api/health"
+healthcheckTimeout = 60
+
+[variables]
+NODE_ENV = "production"
+PORT = "3000"
