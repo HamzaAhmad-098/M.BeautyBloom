@@ -6,11 +6,16 @@ const cloudinary = cloudinaryPackage.v2;
 
 // Configure Cloudinary from environment variables
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name: "dr1rajqzy",
+  api_key: "262126185646844",
+  api_secret: "6mf1GbLRWK8D0pQEyn3EoJedSuw",
 });
-
+// Add after config
+console.log('Cloudinary configured:', {
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key_exists: !!process.env.CLOUDINARY_API_KEY,
+  api_secret_exists: !!process.env.CLOUDINARY_API_SECRET
+});
 // Use memory storage so we can upload buffers directly to Cloudinary
 const storage = multer.memoryStorage();
 

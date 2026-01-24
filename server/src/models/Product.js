@@ -33,31 +33,49 @@ const reviewSchema = mongoose.Schema(
 
 const productSchema = mongoose.Schema(
   {
-    name: { type: String, required: true },
-    brand: { type: String, required: true },
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: false, // Make optional for now
+      ref: 'User',
+    },
+    name: { 
+      type: String, 
+      required: [true, 'Product name is required']
+    },
+    brand: { 
+      type: String, 
+      required: [true, 'Brand is required']
+    },
     category: {
       type: String,
-      required: true,
+      required: [true, 'Category is required'],
       enum: ['Skincare', 'Makeup', 'Haircare', 'Fragrance', 'Bath & Body', 'Tools & Brushes'],
     },
     subCategory: { type: String },
-    price: { type: Number, required: true, default: 0 },
+    price: { 
+      type: Number, 
+      required: [true, 'Price is required'],
+      default: 0,
+      min: [0, 'Price cannot be negative']
+    },
     discountPrice: { type: Number },
     countInStock: { type: Number, default: 0 },
     stock: { type: Number, default: 0 },
     sold: { type: Number, default: 0 },
-    description: { type: String },
+    description: { type: String, default: '' },
 
-    // images array (optional, safe for product creation)
+    // Images array - make it completely optional
     images: {
       type: [
         {
-          url: { type: String },
-          public_id: { type: String },
-          alt: { type: String },
+          url: { type: String, required: false },
+          public_id: { type: String, required: false },
+          file_id: { type: String, required: false },
+          alt: { type: String, required: false },
         },
       ],
       default: [],
+      required: false,
     },
 
     numReviews: { type: Number, default: 0 },
@@ -66,7 +84,12 @@ const productSchema = mongoose.Schema(
     tags: [{ type: String }],
     isFeatured: { type: Boolean, default: false },
     isNew: { type: Boolean, default: true },
-    variants: [{ name: String, price: Number, stock: Number, sku: String }],
+    variants: [{ 
+      name: String, 
+      price: Number, 
+      stock: Number, 
+      sku: String 
+    }],
     weight: { type: String },
     expiryDate: { type: Date },
   },

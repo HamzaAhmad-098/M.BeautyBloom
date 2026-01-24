@@ -50,10 +50,22 @@ export const adminProductApi = {
   },
 
   // Create product
-  createProduct: async (productData) => {
+// Create product
+// Create product
+createProduct: async (productData) => {
+  console.log('🌐 API Call: Creating product');
+  console.log('📦 Product data being sent:', JSON.stringify(productData, null, 2));
+  console.log('🖼️ Images in request:', productData.images);
+  
+  try {
     const response = await api.post('/products', productData);
+    console.log('✅ API Response:', response.data);
     return response.data;
-  },
+  } catch (error) {
+    console.error('❌ API Error:', error.response?.data || error.message);
+    throw error;
+  }
+},
 
   // Update product
   updateProduct: async (productId, productData) => {
@@ -68,16 +80,18 @@ export const adminProductApi = {
   },
 
   // Upload product images to Cloudinary
-  uploadImages: async (formData) => {
-    const token = localStorage.getItem('token');
-    const response = await axios.post(`${API_URL}/admin/upload/images`, formData, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return response.data;
-  },
+// Upload product images to Cloudinary
+uploadImages: async (formData) => {
+  const token = localStorage.getItem('token');
+  // Use /admin/upload/images (not /admin/admin/upload/images)
+  const response = await axios.post(`${API_URL}/admin/upload/images`, formData, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data;
+},
 
   // Get brands
   getBrands: async () => {

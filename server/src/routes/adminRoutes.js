@@ -9,7 +9,7 @@ import {
   getCategories,
 } from '../controllers/productController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
-import { upload } from '../config/cloudinary.js';
+import { upload, uploadToUploadcare } from '../config/uploadcare.js';
 
 const router = express.Router();
 
@@ -26,8 +26,8 @@ router.route('/products/:id')
   .put(updateProduct)
   .delete(deleteProduct);
 
-// Upload routes for Cloudinary
-router.post('/upload/images', upload.array('images', 10), (req, res) => {
+// Upload route for Uploadcare
+router.post('/upload/images', upload.array('images', 10), async (req, res) => {
   try {
     const files = req.files;
     if (!files || files.length === 0) {
@@ -37,13 +37,24 @@ router.post('/upload/images', upload.array('images', 10), (req, res) => {
       });
     }
 
-    // Extract URLs from Cloudinary response
-    const images = files.map(file => file.path);
+    // Upload each file to Uploadcare
+    const uploadPromises = files.map(file => 
+      uploadToUploadcare(file.buffer, file.originalname)
+    );
+    const uploadResults = await Promise.all(uploadPromises);
+
+    // Return proper format
+    const images = uploadResults.map(result => ({
+      url: result.url,
+      public_id: result.public_id,
+      file_id: result.file_id,
+      alt: ''
+    }));
     
     res.json({
       success: true,
       images: images,
-      message: 'Images uploaded successfully to Cloudinary',
+      message: 'Images uploaded successfully to Uploadcare',
     });
   } catch (error) {
     console.error('Upload error:', error);

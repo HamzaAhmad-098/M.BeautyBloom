@@ -1,4 +1,3 @@
-// pages/admin/ProductForm.jsx
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { FaArrowLeft, FaSave, FaUpload, FaTimes, FaSpinner } from 'react-icons/fa';
@@ -10,25 +9,30 @@ const ProductForm = ({ mode = 'create' }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(mode === 'edit');
   const [saving, setSaving] = useState(false);
-  const [categories, setCategories] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [categories] = useState([
+    'Skincare',
+    'Makeup',
+    'Haircare',
+    'Fragrance',
+    'Bath & Body',
+    'Tools & Brushes'
+  ]);
   const [brands, setBrands] = useState([]);
   const [images, setImages] = useState([]);
   
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    price: 0,
-    discountPrice: 0,
+    price: '',
+    discountPrice: '',
     category: '',
     brand: '',
-    stock: 0,
-    images: [],
-    featured: false,
-    specifications: {},
+    stock: '',
+    isFeatured: false,
   });
 
   useEffect(() => {
-    fetchCategories();
     fetchBrands();
     if (mode === 'edit' && id) {
       fetchProduct();
@@ -42,14 +46,12 @@ const ProductForm = ({ mode = 'create' }) => {
       setFormData({
         name: data.name || '',
         description: data.description || '',
-        price: data.price || 0,
-        discountPrice: data.discountPrice || 0,
-        category: data.category?._id || data.category || '',
+        price: data.price || '',
+        discountPrice: data.discountPrice || '',
+        category: data.category || '',
         brand: data.brand || '',
-        stock: data.stock || 0,
-        images: data.images || [],
-        featured: data.featured || false,
-        specifications: data.specifications || {},
+        stock: data.countInStock || data.stock || '',
+        isFeatured: data.isFeatured || false,
       });
       setImages(data.images || []);
     } catch (error) {
@@ -61,19 +63,10 @@ const ProductForm = ({ mode = 'create' }) => {
     }
   };
 
-  const fetchCategories = async () => {
-    try {
-      const data = await adminProductApi.getCategories();
-      setCategories(data);
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-    }
-  };
-
   const fetchBrands = async () => {
     try {
       const data = await adminProductApi.getBrands();
-      setBrands(data);
+      setBrands(data || []);
     } catch (error) {
       console.error('Error fetching brands:', error);
     }
@@ -87,70 +80,126 @@ const ProductForm = ({ mode = 'create' }) => {
     });
   };
 
-const handleImageUpload = async (e) => {
-  const files = Array.from(e.target.files);
-  if (files.length === 0) return;
+  const handleImageUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
 
-  try {
-    const formDataObj = new FormData();
-    files.forEach(file => {
-      formDataObj.append('images', file);
-    });
+    setUploading(true);
+    try {
+      const formDataObj = new FormData();
+      files.forEach(file => {
+        formDataObj.append('images', file);
+      });
 
-    const response = await adminProductApi.uploadImages(formDataObj);
-    const newImages = response.images.map(img => img.url);
-    
-    setImages(prev => [...prev, ...newImages]);
-    setFormData(prev => ({
-      ...prev,
-      images: [...prev.images, ...newImages]
-    }));
-    
-    toast.success('Images uploaded successfully');
-  } catch (error) {
-    console.error('Error uploading images:', error);
-    toast.error(error.response?.data?.message || 'Failed to upload images');
-  }
-};
+      console.log('📤 Uploading', files.length, 'image(s)...');
+      const response = await adminProductApi.uploadImages(formDataObj);
+      console.log('✅ Upload response:', response);
+      
+      const newImages = response.images || [];
+      
+      setImages(prev => [...prev, ...newImages]);
+      
+      toast.success(`${newImages.length} image(s) uploaded successfully`);
+    } catch (error) {
+      console.error('❌ Error uploading images:', error);
+      toast.error(error.response?.data?.message || 'Failed to upload images');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const removeImage = (index) => {
-    const newImages = [...images];
-    newImages.splice(index, 1);
+    const newImages = images.filter((_, i) => i !== index);
     setImages(newImages);
-    setFormData(prev => ({
-      ...prev,
-      images: newImages
-    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validation
-    if (!formData.name || !formData.category || formData.price <= 0) {
-      toast.error('Please fill in all required fields');
+    console.log('🔍 Form submitted');
+    console.log('📝 Current form data:', formData);
+    console.log('🖼️ Current images STATE:', images);
+    
+    // Validation - Brand is OPTIONAL, so removed from required validation
+    if (!formData.name) {
+      toast.error('Please enter product name');
       return;
+    }
+    
+    if (!formData.category) {
+      toast.error('Please select a category');
+      return;
+    }
+    
+    // Price validation - required
+    if (!formData.price || Number(formData.price) <= 0) {
+      toast.error('Please enter a valid price');
+      return;
+    }
+
+    // Validate discount price logic (if provided)
+    if (formData.discountPrice && formData.discountPrice.trim() !== '') {
+      const price = Number(formData.price);
+      const discountPrice = Number(formData.discountPrice);
+      
+      if (discountPrice <= 0) {
+        toast.error('Discount price must be greater than 0 Rs');
+        return;
+      }
+      
+      if (discountPrice >= price) {
+        toast.error('Discount price must be less than the original price');
+        return;
+      }
     }
 
     setSaving(true);
     try {
+      // Prepare product data - brand is optional, can be empty string
       const productData = {
-        ...formData,
-        actualPrice: formData.discountPrice > 0 ? formData.discountPrice : formData.price,
+        name: formData.name.trim(),
+        price: Number(formData.price),
+        description: formData.description?.trim() || '',
+        brand: formData.brand?.trim() || '', // Optional field
+        category: formData.category,
+        countInStock: formData.stock ? Number(formData.stock) : 0,
+        stock: formData.stock ? Number(formData.stock) : 0,
+        discountPrice: formData.discountPrice && formData.discountPrice.trim() !== '' 
+          ? Number(formData.discountPrice) 
+          : 0, // Send 0 if empty
+        isFeatured: formData.isFeatured || false,
+        isNew: true,
+        images: images,
       };
 
+      console.log('📤 Sending product data:', productData);
+      console.log('📤 Brand value:', productData.brand);
+
+      let response;
       if (mode === 'create') {
-        await adminProductApi.createProduct(productData);
+        response = await adminProductApi.createProduct(productData);
+        console.log('✅ Product created response:', response);
         toast.success('Product created successfully');
       } else {
-        await adminProductApi.updateProduct(id, productData);
+        response = await adminProductApi.updateProduct(id, productData);
+        console.log('✅ Product updated response:', response);
         toast.success('Product updated successfully');
       }
       
-      navigate('/admin/products');
+      // Navigate back to products list
+      setTimeout(() => {
+        navigate('/admin/products');
+      }, 500);
+      
     } catch (error) {
-      console.error(`Error ${mode === 'create' ? 'creating' : 'updating'} product:`, error);
-      toast.error(error.response?.data?.message || `Failed to ${mode === 'create' ? 'create' : 'update'} product`);
+      console.error(`❌ Error ${mode === 'create' ? 'creating' : 'updating'} product:`, error);
+      console.error('Error details:', error.response?.data);
+      
+      const errorMessage = error.response?.data?.message || 
+                          error.message || 
+                          `Failed to ${mode === 'create' ? 'create' : 'update'} product`;
+      
+      toast.error(errorMessage);
     } finally {
       setSaving(false);
     }
@@ -167,6 +216,21 @@ const handleImageUpload = async (e) => {
     );
   }
 
+  // Calculate discount percentage for display
+  const calculateDiscountPercentage = () => {
+    if (!formData.price || !formData.discountPrice || formData.discountPrice.trim() === '') {
+      return 0;
+    }
+    const price = Number(formData.price);
+    const discountPrice = Number(formData.discountPrice);
+    if (price <= 0 || discountPrice <= 0 || discountPrice >= price) {
+      return 0;
+    }
+    return Math.round(((price - discountPrice) / price) * 100);
+  };
+
+  const discountPercentage = calculateDiscountPercentage();
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-6">
       <div className="max-w-4xl mx-auto">
@@ -177,6 +241,7 @@ const handleImageUpload = async (e) => {
               <button
                 onClick={() => navigate('/admin/products')}
                 className="flex items-center text-gray-600 hover:text-gray-900 mb-4"
+                type="button"
               >
                 <FaArrowLeft className="mr-2" />
                 Back to Products
@@ -202,7 +267,7 @@ const handleImageUpload = async (e) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Product Name *
+                    Product Name <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -216,7 +281,7 @@ const handleImageUpload = async (e) => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Category *
+                    Category <span className="text-red-500">*</span>
                   </label>
                   <select
                     name="category"
@@ -226,9 +291,9 @@ const handleImageUpload = async (e) => {
                     required
                   >
                     <option value="">Select a category</option>
-                    {categories.map(category => (
-                      <option key={category._id} value={category._id}>
-                        {category.name}
+                    {categories.map(cat => (
+                      <option key={cat} value={cat}>
+                        {cat}
                       </option>
                     ))}
                   </select>
@@ -256,32 +321,55 @@ const handleImageUpload = async (e) => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Price ($) *
+                    Price (Rs) <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    type="number"
-                    name="price"
-                    value={formData.price}
-                    onChange={handleInputChange}
-                    min="0"
-                    step="0.01"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    required
-                  />
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <span className="text-gray-500">Rs</span>
+                    </div>
+                    <input
+                      type="number"
+                      name="price"
+                      value={formData.price}
+                      onChange={handleInputChange}
+                      min="0.01"
+                      step="0.01"
+                      className="w-full pl-12 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      placeholder="0.00"
+                      required
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Original price in Pakistani Rupees</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Discount Price ($)
+                    Discount Price (Rs)
                   </label>
-                  <input
-                    type="number"
-                    name="discountPrice"
-                    value={formData.discountPrice}
-                    onChange={handleInputChange}
-                    min="0"
-                    step="0.01"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  />
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <span className="text-gray-500">Rs</span>
+                    </div>
+                    <input
+                      type="number"
+                      name="discountPrice"
+                      value={formData.discountPrice}
+                      onChange={handleInputChange}
+                      min="0.01"
+                      step="0.01"
+                      className="w-full pl-12 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      placeholder="0.00"
+                    />
+                    {discountPercentage > 0 && (
+                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                        <span className="bg-red-100 text-red-800 text-xs font-semibold px-2 py-1 rounded">
+                          {discountPercentage}% OFF
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Optional - Must be less than original price
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -292,9 +380,16 @@ const handleImageUpload = async (e) => {
                     name="brand"
                     value={formData.brand}
                     onChange={handleInputChange}
+                    list="brands-list"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    placeholder="Enter brand name"
+                    placeholder="Enter brand name (optional)"
                   />
+                  <datalist id="brands-list">
+                    {brands.map((brand, idx) => (
+                      <option key={idx} value={brand} />
+                    ))}
+                  </datalist>
+                  <p className="text-xs text-gray-500 mt-1">Optional field</p>
                 </div>
               </div>
             </div>
@@ -305,7 +400,7 @@ const handleImageUpload = async (e) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Stock Quantity *
+                    Stock Quantity
                   </label>
                   <input
                     type="number"
@@ -314,17 +409,17 @@ const handleImageUpload = async (e) => {
                     onChange={handleInputChange}
                     min="0"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    required
+                    placeholder="0"
                   />
                 </div>
-                <div className="flex items-center">
-                  <label className="flex items-center">
+                <div className="flex items-end pb-2">
+                  <label className="flex items-center cursor-pointer">
                     <input
                       type="checkbox"
-                      name="featured"
-                      checked={formData.featured}
+                      name="isFeatured"
+                      checked={formData.isFeatured}
                       onChange={handleInputChange}
-                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 w-4 h-4"
                     />
                     <span className="ml-2 text-sm text-gray-700">Featured Product</span>
                   </label>
@@ -343,11 +438,20 @@ const handleImageUpload = async (e) => {
                   <div className="flex items-center justify-center w-full">
                     <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
                       <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                        <FaUpload className="w-8 h-8 mb-4 text-gray-500" />
-                        <p className="mb-2 text-sm text-gray-500">
-                          <span className="font-semibold">Click to upload</span> or drag and drop
-                        </p>
-                        <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
+                        {uploading ? (
+                          <>
+                            <FaSpinner className="w-8 h-8 mb-4 text-primary-500 animate-spin" />
+                            <p className="text-sm text-gray-500">Uploading...</p>
+                          </>
+                        ) : (
+                          <>
+                            <FaUpload className="w-8 h-8 mb-4 text-gray-500" />
+                            <p className="mb-2 text-sm text-gray-500">
+                              <span className="font-semibold">Click to upload</span> or drag and drop
+                            </p>
+                            <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
+                          </>
+                        )}
                       </div>
                       <input
                         type="file"
@@ -355,6 +459,7 @@ const handleImageUpload = async (e) => {
                         accept="image/*"
                         onChange={handleImageUpload}
                         className="hidden"
+                        disabled={uploading}
                       />
                     </label>
                   </div>
@@ -370,17 +475,17 @@ const handleImageUpload = async (e) => {
                       {images.map((image, index) => (
                         <div key={index} className="relative group">
                           <img
-                            src={image}
+                            src={image.url || image}
                             alt={`Product ${index + 1}`}
-                            className="w-full h-24 object-cover rounded-lg"
+                            className="w-full h-24 object-cover rounded-lg border border-gray-200"
                             onError={(e) => {
-                              e.target.src = 'https://via.placeholder.com/150';
+                              e.target.src = 'https://via.placeholder.com/150?text=Image';
                             }}
                           />
                           <button
                             type="button"
                             onClick={() => removeImage(index)}
-                            className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="absolute -top-2 -right-2 bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:bg-red-600"
                           >
                             <FaTimes className="w-3 h-3" />
                           </button>
@@ -397,15 +502,15 @@ const handleImageUpload = async (e) => {
               <button
                 type="button"
                 onClick={() => navigate('/admin/products')}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-colors"
                 disabled={saving}
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 flex items-center disabled:opacity-50"
-                disabled={saving}
+                className="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 flex items-center disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                disabled={saving || uploading}
               >
                 {saving ? (
                   <>

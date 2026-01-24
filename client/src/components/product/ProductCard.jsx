@@ -81,20 +81,26 @@ const ProductCard = ({ product }) => {
         />
       </button>
 
-      {/* Product Image */}
-      <Link to={`/product/${product._id}`} className="block overflow-hidden">
-        <div className="relative h-64">
-          <img
-            src={product.images?.[0] || 'https://via.placeholder.com/300'}
-            alt={product.name || 'Product'}
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-            onError={(e) => {
-              e.target.src = 'https://via.placeholder.com/300';
-            }}
-          />
-          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all duration-300"></div>
-        </div>
-      </Link>
+   
+{/* Product Image */}
+<Link to={`/product/${product._id}`} className="block overflow-hidden group">
+  <div className="relative h-64">
+    <img
+      src={
+        product.images?.[0]?.public_id
+          ? `https://s2vbpeuic7.ucarecd.net/${product.images[0].public_id}/-/preview/600x600/`
+          : 'https://via.placeholder.com/300'
+      }
+      alt={product.name || 'Product'}
+      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+      onError={(e) => {
+        e.target.src = 'https://via.placeholder.com/300';
+      }}
+    />
+    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all duration-300"></div>
+  </div>
+</Link>
+
 
       {/* Product Info */}
       <div className="p-4">

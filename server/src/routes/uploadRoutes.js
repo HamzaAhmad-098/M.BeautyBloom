@@ -1,11 +1,11 @@
 import express from 'express';
 import asyncHandler from 'express-async-handler';
 import { protect, admin } from '../middleware/authMiddleware.js';
-import { upload, uploadToCloudinary } from '../config/cloudinary.js';
+import { upload, uploadToUploadcare } from '../config/uploadcare.js';
 
 const router = express.Router();
 
-// Admin image upload route (Cloudinary)
+// Admin image upload route (Uploadcare)
 router.post(
   '/admin/upload/images',
   protect,
@@ -16,14 +16,15 @@ router.post(
       return res.status(400).json({ message: 'No files provided' });
     }
 
-    // upload each buffer to Cloudinary
+    // Upload each buffer to Uploadcare
     const uploaded = await Promise.all(
-      req.files.map((file) => uploadToCloudinary(file.buffer))
+      req.files.map((file) => uploadToUploadcare(file.buffer, file.originalname))
     );
 
     const images = uploaded.map((u) => ({
-      url: u.secure_url || u.url,
-      public_id: u.public_id,
+      url: u.url || u.secure_url,
+      public_id: u.public_id || u.file_id,
+      file_id: u.file_id,
     }));
 
     res.json(images);

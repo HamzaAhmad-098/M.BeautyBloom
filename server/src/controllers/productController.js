@@ -1,6 +1,6 @@
 import asyncHandler from 'express-async-handler';
 import Product from '../models/Product.js';
-import cloudinary from '../config/cloudinary.js';
+import { deleteFromUploadcare } from '../config/uploadcare.js';
 
 // @desc    Get products (paginated & filterable)
 // @route   GET /api/products
@@ -36,21 +36,18 @@ const getProductById = asyncHandler(async (req, res) => {
     throw new Error('Product not found');
   }
 });
-
-// @desc    Create a product
-// @route   POST /api/products
-// Replace the existing createProduct handler with the following:
-
 // @desc    Create a product
 // @route   POST /api/products
 // @access  Private/Admin
 const createProduct = asyncHandler(async (req, res) => {
+  console.log('📦 Creating product - Request body:', JSON.stringify(req.body, null, 2));
+  console.log('👤 User:', req.user?._id);
+
   if (!req.user || !req.user._id) {
     res.status(401);
     throw new Error('Not authorized');
   }
 
-  // Accept product data from client if provided
   const {
     name,
     price,
@@ -59,6 +56,7 @@ const createProduct = asyncHandler(async (req, res) => {
     brand,
     category,
     countInStock,
+    stock,
     discountPrice,
     isFeatured,
     isNew,
@@ -69,77 +67,109 @@ const createProduct = asyncHandler(async (req, res) => {
     expiryDate,
   } = req.body || {};
 
-  // Helper to normalize images field (client may send JSON string or array)
-  const parseImages = (imagesInput) => {
-    if (!imagesInput) return [];
-    if (typeof imagesInput === 'string') {
-      try {
-        return JSON.parse(imagesInput);
-      } catch (err) {
-        // maybe comma separated string of urls
-        return imagesInput.split(',').map((u) => ({ url: u.trim(), public_id: '' })).filter(Boolean);
-      }
-    }
-    if (Array.isArray(imagesInput)) {
-      return imagesInput.map((i) => {
-        if (typeof i === 'string') return { url: i, public_id: '' };
-        return { url: i.url || i.secure_url || '', public_id: i.public_id || i.publicId || '' };
-      });
-    }
-    return [];
-  };
+  console.log('📝 Raw images received:', images);
+  console.log('📝 Images type:', typeof images);
+  console.log('📝 Is Array:', Array.isArray(images));
 
-  // If the admin provided meaningful data, create product from that payload
-  const hasClientData = name || price || brand || category || (images && images.length);
-
-  if (hasClientData) {
-    // validate minimal required fields
-    if (!name || !price || !brand || !category) {
-      res.status(400);
-      throw new Error('name, price, brand and category are required to create a product');
-    }
-
-    const product = new Product({
-      name,
-      price: Number(price),
-      user: req.user._id,
-      images: parseImages(images),
-      brand,
-      category,
-      subCategory,
-      countInStock: countInStock !== undefined ? Number(countInStock) : 0,
-      discountPrice: discountPrice !== undefined ? Number(discountPrice) : undefined,
-      isFeatured: !!isFeatured,
-      isNew: isNew !== undefined ? !!isNew : true,
-      variants: variants || [],
-      tags: tags || [],
-      description: description || '',
-      weight,
-      expiryDate,
-    });
-
-    const createdProduct = await product.save();
-    res.status(201).json(createdProduct);
-    return;
+  // Validate required fields
+  if (!name || !price || !brand || !category) {
+    console.error('❌ Validation failed - missing required fields');
+    res.status(400);
+    throw new Error('name, price, brand and category are required');
   }
 
-  // Fallback: keep the old admin quick-create behavior for UI flows that expect it
-  const sampleProduct = new Product({
-    name: 'Sample name',
-    price: 0,
+  // Process images - ensure they're in the correct format
+  let processedImages = [];
+  
+  if (images) {
+    if (Array.isArray(images)) {
+      processedImages = images.map((img) => {
+        // If img is already an object with url
+        if (typeof img === 'object' && img !== null) {
+          return {
+            url: img.url || '',
+            public_id: img.public_id || img.file_id || '',
+            alt: img.alt || ''
+          };
+        }
+        // If img is a string URL
+        if (typeof img === 'string') {
+          return {
+            url: img,
+            public_id: '',
+            alt: ''
+          };
+        }
+        return null;
+      }).filter(img => img !== null && img.url); // Remove null and empty URLs
+    } else if (typeof images === 'string') {
+      // Try to parse as JSON
+      try {
+        const parsed = JSON.parse(images);
+        if (Array.isArray(parsed)) {
+          processedImages = parsed.map(img => ({
+            url: typeof img === 'string' ? img : img.url,
+            public_id: typeof img === 'object' ? (img.public_id || img.file_id || '') : '',
+            alt: typeof img === 'object' ? (img.alt || '') : ''
+          })).filter(img => img.url);
+        }
+      } catch (e) {
+        // If not JSON, treat as comma-separated URLs
+        processedImages = images.split(',')
+          .map(url => url.trim())
+          .filter(url => url)
+          .map(url => ({ url, public_id: '', alt: '' }));
+      }
+    }
+  }
+
+  console.log('🖼️  Processed images:', processedImages);
+  console.log('🖼️  Image count:', processedImages.length);
+
+  const productData = {
+    name: name.trim(),
+    price: Number(price),
     user: req.user._id,
-    images: [], // empty array to avoid validation problems
-    brand: 'Sample brand',
-    category: 'Skincare',
-    countInStock: 0,
-    numReviews: 0,
-    description: 'Sample description',
-  });
+    images: processedImages,
+    brand: brand.trim(),
+    category,
+    subCategory: subCategory || undefined,
+    countInStock: countInStock !== undefined ? Number(countInStock) : (stock !== undefined ? Number(stock) : 0),
+    stock: stock !== undefined ? Number(stock) : (countInStock !== undefined ? Number(countInStock) : 0),
+    discountPrice: discountPrice !== undefined && discountPrice > 0 ? Number(discountPrice) : undefined,
+    isFeatured: !!isFeatured,
+    isNew: isNew !== undefined ? !!isNew : true,
+    variants: Array.isArray(variants) ? variants : [],
+    tags: Array.isArray(tags) ? tags : [],
+    description: description ? description.trim() : '',
+    weight,
+    expiryDate,
+  };
 
-  const createdProduct = await sampleProduct.save();
-  res.status(201).json(createdProduct);
+  console.log('💾 Final product data to save:', JSON.stringify(productData, null, 2));
+
+  try {
+    const product = new Product(productData);
+    const createdProduct = await product.save();
+    
+    console.log('✅ Product saved to database:', {
+      id: createdProduct._id,
+      name: createdProduct.name,
+      imageCount: createdProduct.images?.length || 0,
+      images: createdProduct.images
+    });
+    
+    res.status(201).json(createdProduct);
+  } catch (saveError) {
+    console.error('❌ Error saving product to database:', saveError);
+    console.error('Error details:', saveError.message);
+    if (saveError.errors) {
+      console.error('Validation errors:', saveError.errors);
+    }
+    res.status(400);
+    throw new Error(saveError.message || 'Failed to save product');
+  }
 });
-
 // @desc    Update a product
 // @route   PUT /api/products/:id
 // @access  Private/Admin
@@ -180,23 +210,25 @@ const updateProduct = asyncHandler(async (req, res) => {
     product.weight = weight || product.weight;
     product.expiryDate = expiryDate || product.expiryDate;
 
-    // If images present in request, replace them. Expect format: [{ url, public_id, alt }]
     if (images && Array.isArray(images)) {
       const currentPublicIds = (product.images || []).map((i) => i.public_id).filter(Boolean);
       const newPublicIds = images.map((i) => i.public_id).filter(Boolean);
 
-      // delete images that are not present in newPublicIds
+      // Delete removed images from Uploadcare
       const toDelete = currentPublicIds.filter((id) => id && !newPublicIds.includes(id));
-      for (const pid of toDelete) {
+      for (const fileId of toDelete) {
         try {
-          await cloudinary.uploader.destroy(pid, { resource_type: 'image' });
+          await deleteFromUploadcare(fileId);
         } catch (err) {
-          // log and continue
-          console.error('Cloudinary delete error', pid, err.message || err);
+          console.error('Uploadcare delete error', fileId, err.message || err);
         }
       }
 
-      product.images = images.map((i) => ({ url: i.url, public_id: i.public_id || '', alt: i.alt || '' }));
+      product.images = images.map((i) => ({ 
+        url: i.url, 
+        public_id: i.public_id || i.file_id || '', 
+        alt: i.alt || '' 
+      }));
     }
 
     const updatedProduct = await product.save();
@@ -214,14 +246,14 @@ const deleteProduct = asyncHandler(async (req, res) => {
   const product = await Product.findById(req.params.id);
 
   if (product) {
-    // delete images from Cloudinary (if public_id present)
+    // Delete images from Uploadcare
     if (product.images && product.images.length) {
       for (const img of product.images) {
         if (img.public_id) {
           try {
-            await cloudinary.uploader.destroy(img.public_id, { resource_type: 'image' });
+            await deleteFromUploadcare(img.public_id);
           } catch (err) {
-            console.error('Cloudinary delete error', img.public_id, err.message || err);
+            console.error('Uploadcare delete error', img.public_id, err.message || err);
           }
         }
       }
@@ -240,7 +272,6 @@ const deleteProduct = asyncHandler(async (req, res) => {
 // @access  Private
 const createProductReview = asyncHandler(async (req, res) => {
   const { rating, comment } = req.body;
-
   const product = await Product.findById(req.params.id);
 
   if (product) {
@@ -260,7 +291,6 @@ const createProductReview = asyncHandler(async (req, res) => {
     };
 
     product.reviews.push(review);
-
     product.numReviews = product.reviews.length;
     product.rating = product.reviews.reduce((acc, item) => item.rating + acc, 0) / product.reviews.length;
 

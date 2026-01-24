@@ -1,8 +1,22 @@
+
+import  dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get current directory
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env from parent directory (server folder)
+dotenv.config({ path: path.join(__dirname, '../.env') });
+
+// Verify it loaded
+console.log('Environment check:', {
+  CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME ? '✅ Loaded' : '❌ Not loaded',
+  CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY ? '✅ Loaded' : '❌ Not loaded',
+  CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET ? '✅ Loaded' : '❌ Not loaded',
+});
 import app from './app.js';
-import dotenv from 'dotenv';
-
-dotenv.config();
-
 const PORT = process.env.PORT || 5000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
