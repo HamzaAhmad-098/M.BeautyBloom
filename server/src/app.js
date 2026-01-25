@@ -44,32 +44,48 @@ app.use(helmet({
 
 app.use(mongoSanitize());
 
-// Enhanced CORS configuration
-const allowedOrigins = process.env.NODE_ENV === 'production' 
-  ? [process.env.FRONTEND_URL, 'http://localhost:3000', 'https://localhost:3000']
-  : ['http://localhost:3000', 'https://localhost:3000', 'http://localhost:5173', 'https://localhost:5173'];
+// Update the CORS configuration
+const allowedOrigins = process.env.NODE_ENV === 'production'
+  ? [
+      'https://ingenious-laughter-production.up.railway.app',
+      'http://localhost:3000',
+      'http://localhost:5173'
+    ]
+  : ['http://localhost:3000', 'http://localhost:5173'];
+
+console.log('🌐 Configuring CORS for origins:', allowedOrigins);
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) === -1) {
-      // Only log in development
-      if (process.env.NODE_ENV === 'development') {
-        console.log('CORS blocked origin:', origin);
-      }
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
+    // Allow requests with no origin (like mobile apps, curl, etc.)
+    if (!origin) {
+      console.log('🔓 Allowing request without origin');
+      return callback(null, true);
     }
-    return callback(null, true);
+    
+    // Check if origin is allowed
+    if (allowedOrigins.includes(origin)) {
+      console.log(`✅ Allowing CORS for: ${origin}`);
+      callback(null, true);
+    } else {
+      console.log(`❌ Blocking CORS for: ${origin}`);
+      console.log('📋 Allowed origins:', allowedOrigins);
+      
+      // In production, be more strict but allow your Railway domain
+      if (process.env.NODE_ENV === 'production' && origin.includes('railway.app')) {
+        console.log(`⚠️  Allowing Railway subdomain: ${origin}`);
+        callback(null, true);
+      } else {
+        const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+        callback(new Error(msg), false);
+      }
+    }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept', 'Cookie', 'Set-Cookie'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   exposedHeaders: ['Set-Cookie']
 }));
-
 // Handle preflight requests
 app.options('*', cors());
 

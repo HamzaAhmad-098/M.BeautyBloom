@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { FaArrowLeft, FaSave, FaUpload, FaTimes, FaSpinner } from 'react-icons/fa';
-import { adminProductApi } from '@/services/adminApi';
+import { adminProductApi } from '@/services/adminApi.js';
 import { toast } from 'react-toastify';
 
 const ProductForm = ({ mode = 'create' }) => {

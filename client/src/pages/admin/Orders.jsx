@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FaSearch, FaFilter, FaEye, FaCheck, FaTruck, FaTimes, FaPrint, FaSpinner } from 'react-icons/fa';
-import { adminOrderApi } from '@/services/adminApi';
+import { adminOrderApi } from '@/services/adminApi.js';
 import { toast } from 'react-toastify';
 
 /*

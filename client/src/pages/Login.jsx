@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { login } from '../store/slices/authSlice';
-import { selectCurrentUser, selectIsAuthenticated } from '../store/slices/authSlice';
+import { login } from '../store/slices/authSlice.js';
+import { selectCurrentUser, selectIsAuthenticated } from '../store/slices/authSlice.js';
 import { FaEnvelope, FaLock, FaEye, FaEyeSlash } from 'react-icons/fa';
 
 const Login = () => {

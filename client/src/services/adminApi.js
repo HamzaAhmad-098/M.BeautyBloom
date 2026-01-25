@@ -1,6 +1,13 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// For production on Railway
+const API_URL = import.meta.env.VITE_API_URL || 
+  (window.location.origin === 'https://ingenious-laughter-production.up.railway.app' 
+    ? '/api' 
+    : 'http://localhost:5000/api');
+
+console.log('🚀 Frontend API URL:', API_URL);
+console.log('🌐 Current origin:', window.location.origin);
 
 const api = axios.create({
   baseURL: API_URL,
@@ -10,31 +17,44 @@ const api = axios.create({
   withCredentials: true,
 });
 
-// Add auth token to requests
+// Request interceptor
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    console.log(`📤 ${config.method?.toUpperCase()} ${config.url}`);
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    console.error('❌ Request error:', error);
+    return Promise.reject(error);
+  }
 );
 
-// Handle response errors
+// Response interceptor
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log(`✅ ${response.status} ${response.config.url}`);
+    return response;
+  },
   (error) => {
+    console.error('❌ Response error:', {
+      url: error.config?.url,
+      status: error.response?.status,
+      message: error.message
+    });
+    
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
     }
+    
     return Promise.reject(error);
   }
 );
-
 // ============ PRODUCT MANAGEMENT ============
 export const adminProductApi = {
   // Get all products with filters

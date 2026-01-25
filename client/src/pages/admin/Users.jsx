@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FaSearch, FaFilter, FaUserShield, FaUserCheck, FaUserTimes, FaEdit, FaTrash, FaSpinner, FaPlus } from 'react-icons/fa';
-import { adminUserApi } from '@/services/adminApi';
+import { adminUserApi } from '@/services/adminApi.js';
 import { toast } from 'react-toastify';
 
 const Users = () => {

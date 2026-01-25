@@ -13,7 +13,7 @@ import {
   FaTruck,
   FaWhatsapp
 } from 'react-icons/fa';
-import { checkoutApi } from '@/services/checkoutApi';
+import { checkoutApi } from '@/services/checkoutApi.js';
 
 const OrderConfirmation = () => {
   const { orderId } = useParams();

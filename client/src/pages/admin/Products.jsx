@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FaEdit, FaTrash, FaPlus, FaSpinner, FaSearch } from 'react-icons/fa';
-import { adminProductApi } from '@/services/adminApi';
+import { adminProductApi } from '@/services/adminApi.js';
 import { toast } from 'react-toastify';
 
 function AdminProducts() {

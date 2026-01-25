@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { FaArrowLeft, FaEdit, FaEye, FaBox, FaTag, FaDollarSign, FaChartLine, FaSpinner } from 'react-icons/fa';
-import { adminProductApi } from '@/services/adminApi';
+import { adminProductApi } from '@/services/adminApi.js';
 import { toast } from 'react-toastify';
 
 const ProductDetail = () => {

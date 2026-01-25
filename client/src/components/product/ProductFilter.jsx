@@ -1,259 +1,138 @@
-import { useState, useEffect } from 'react';
 import { FaTimes } from 'react-icons/fa';
 
-const ProductFilter = ({ filters, onFilterChange, onClearFilters }) => {
-  const [localFilters, setLocalFilters] = useState(filters);
-  const [priceRange, setPriceRange] = useState([0, 50000]);
-  const [brands, setBrands] = useState([
-    'Maybelline',
-    'L\'Oreal',
-    'Neutrogena',
-    'Nivea',
-    'Pantene',
-    'Garnier',
-    'Dove',
-    'Chanel',
-    'MAC',
-    'Estée Lauder',
-  ]);
-
-  useEffect(() => {
-    setLocalFilters(filters);
-  }, [filters]);
-
-  const handleBrandToggle = (brand) => {
-    const updatedBrands = localFilters.brand.includes(brand)
-      ? localFilters.brand.filter((b) => b !== brand)
-      : [...localFilters.brand, brand];
-    
-    setLocalFilters({ ...localFilters, brand: updatedBrands });
-    onFilterChange({ brand: updatedBrands });
-  };
-
-  const handlePriceChange = (min, max) => {
-    setLocalFilters({ ...localFilters, minPrice: min, maxPrice: max });
-    onFilterChange({ minPrice: min, maxPrice: max });
-  };
-
-  const handleRatingChange = (rating) => {
-    setLocalFilters({ ...localFilters, rating });
-    onFilterChange({ rating });
-  };
-
-  const categories = [
-    'Skincare',
-    'Makeup',
-    'Haircare',
-    'Fragrance',
-    'Bath & Body',
-    'Tools & Brushes',
-  ];
+const ProductFilter = ({ filters, onFilterChange, onClearFilters, isMobile = false }) => {
+  const categories = ['Skincare', 'Makeup', 'Haircare', 'Fragrance', 'Tools'];
+  const brands = ['L\'Oréal', 'Maybelline', 'MAC', 'NARS', 'Estée Lauder', 'Clinique'];
+  const ratings = [5, 4, 3, 2, 1];
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <h3 className="text-lg font-semibold">Filters</h3>
-        <button
-          onClick={onClearFilters}
-          className="text-sm text-primary-600 hover:text-primary-700"
-        >
-          Clear All
-        </button>
+    <div className={`${isMobile ? '' : 'bg-white rounded-lg shadow p-4 sm:p-6'}`}>
+      {isMobile ? (
+        <div className="mb-4">
+          <h3 className="text-lg font-bold mb-4">Filters</h3>
+        </div>
+      ) : (
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-semibold text-gray-900">Filters</h3>
+          <button
+            onClick={onClearFilters}
+            className="text-primary-600 hover:text-primary-700 text-sm"
+          >
+            Clear all
+          </button>
+        </div>
+      )}
+
+      {/* Category Filter */}
+      <div className="mb-4 sm:mb-6">
+        <h4 className="font-medium text-gray-700 mb-2 text-sm sm:text-base">Category</h4>
+        <div className="space-y-1">
+          {categories.map((category) => (
+            <label key={category} className="flex items-center cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={filters.category === category}
+                onChange={() => onFilterChange({ category: filters.category === category ? '' : category })}
+                className="h-4 w-4 text-primary-600 rounded focus:ring-primary-500 border-gray-300"
+              />
+              <span className="ml-2 text-gray-600 text-sm sm:text-base group-hover:text-gray-900 transition-colors">
+                {category}
+              </span>
+            </label>
+          ))}
+        </div>
       </div>
 
-      {/* Categories */}
-      <div className="mb-6">
-        <h4 className="font-medium text-gray-700 mb-3">Categories</h4>
-        <div className="space-y-2">
-          {categories.map((category) => (
-            <div key={category} className="flex items-center">
+      {/* Brand Filter */}
+      <div className="mb-4 sm:mb-6">
+        <h4 className="font-medium text-gray-700 mb-2 text-sm sm:text-base">Brand</h4>
+        <div className="space-y-1 max-h-40 overflow-y-auto">
+          {brands.map((brand) => (
+            <label key={brand} className="flex items-center cursor-pointer group">
               <input
-                type="radio"
-                id={`cat-${category}`}
-                name="category"
-                checked={localFilters.category === category}
-                onChange={() => {
-                  setLocalFilters({ ...localFilters, category });
-                  onFilterChange({ category });
+                type="checkbox"
+                checked={filters.brand.includes(brand)}
+                onChange={(e) => {
+                  const newBrands = e.target.checked
+                    ? [...filters.brand, brand]
+                    : filters.brand.filter(b => b !== brand);
+                  onFilterChange({ brand: newBrands });
                 }}
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                className="h-4 w-4 text-primary-600 rounded focus:ring-primary-500 border-gray-300"
               />
-              <label
-                htmlFor={`cat-${category}`}
-                className="ml-2 text-gray-600 cursor-pointer"
-              >
-                {category}
-              </label>
-            </div>
+              <span className="ml-2 text-gray-600 text-sm sm:text-base group-hover:text-gray-900 transition-colors truncate">
+                {brand}
+              </span>
+            </label>
           ))}
         </div>
       </div>
 
       {/* Price Range */}
-      <div className="mb-6">
-        <h4 className="font-medium text-gray-700 mb-3">Price Range</h4>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <input
-              type="number"
-              placeholder="Min"
-              value={localFilters.minPrice || ''}
-              onChange={(e) => handlePriceChange(e.target.value, localFilters.maxPrice)}
-              className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
-            />
-            <span className="text-gray-400">to</span>
-            <input
-              type="number"
-              placeholder="Max"
-              value={localFilters.maxPrice || ''}
-              onChange={(e) => handlePriceChange(localFilters.minPrice, e.target.value)}
-              className="w-24 px-3 py-2 border border-gray-300 rounded-md text-sm"
-            />
-          </div>
-          <div className="text-sm text-gray-500">
-            Common ranges:
-            <div className="flex flex-wrap gap-2 mt-2">
-              {[
-                { min: 0, max: 1000, label: 'Under Rs. 1,000' },
-                { min: 1000, max: 3000, label: 'Rs. 1,000 - 3,000' },
-                { min: 3000, max: 5000, label: 'Rs. 3,000 - 5,000' },
-                { min: 5000, max: '', label: 'Above Rs. 5,000' },
-              ].map((range) => (
-                <button
-                  key={range.label}
-                  onClick={() => handlePriceChange(range.min, range.max)}
-                  className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-md text-xs"
-                >
-                  {range.label}
-                </button>
-              ))}
-            </div>
-          </div>
+      <div className="mb-4 sm:mb-6">
+        <h4 className="font-medium text-gray-700 mb-2 text-sm sm:text-base">Price Range</h4>
+        <div className="flex space-x-2">
+          <input
+            type="number"
+            placeholder="Min"
+            value={filters.minPrice}
+            onChange={(e) => onFilterChange({ minPrice: e.target.value })}
+            className="w-1/2 px-2 py-1 sm:px-3 sm:py-2 border border-gray-300 rounded text-sm sm:text-base"
+          />
+          <input
+            type="number"
+            placeholder="Max"
+            value={filters.maxPrice}
+            onChange={(e) => onFilterChange({ maxPrice: e.target.value })}
+            className="w-1/2 px-2 py-1 sm:px-3 sm:py-2 border border-gray-300 rounded text-sm sm:text-base"
+          />
         </div>
       </div>
 
-      {/* Brands */}
-      <div className="mb-6">
-        <h4 className="font-medium text-gray-700 mb-3">Brands</h4>
-        <div className="space-y-2 max-h-48 overflow-y-auto">
-          {brands.map((brand) => (
-            <div key={brand} className="flex items-center">
-              <input
-                type="checkbox"
-                id={`brand-${brand}`}
-                checked={localFilters.brand.includes(brand)}
-                onChange={() => handleBrandToggle(brand)}
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-              />
-              <label
-                htmlFor={`brand-${brand}`}
-                className="ml-2 text-gray-600 cursor-pointer"
-              >
-                {brand}
-              </label>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Rating */}
-      <div className="mb-6">
-        <h4 className="font-medium text-gray-700 mb-3">Rating</h4>
-        <div className="space-y-2">
-          {[4, 3, 2, 1].map((rating) => (
-            <div key={rating} className="flex items-center">
+      {/* Rating Filter */}
+      <div className="mb-4 sm:mb-6">
+        <h4 className="font-medium text-gray-700 mb-2 text-sm sm:text-base">Rating</h4>
+        <div className="space-y-1">
+          {ratings.map((rating) => (
+            <label key={rating} className="flex items-center cursor-pointer group">
               <input
                 type="radio"
-                id={`rating-${rating}`}
                 name="rating"
-                checked={localFilters.rating === rating.toString()}
-                onChange={() => handleRatingChange(rating.toString())}
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                checked={filters.rating === rating.toString()}
+                onChange={() => onFilterChange({ rating: filters.rating === rating.toString() ? '' : rating.toString() })}
+                className="h-4 w-4 text-primary-600"
               />
-              <label
-                htmlFor={`rating-${rating}`}
-                className="ml-2 text-gray-600 cursor-pointer flex items-center"
-              >
-                {[...Array(5)].map((_, i) => (
-                  <span
-                    key={i}
-                    className={`text-lg ${
-                      i < rating ? 'text-yellow-400' : 'text-gray-300'
-                    }`}
-                  >
-                    ★
-                  </span>
-                ))}
-                <span className="ml-2">& above</span>
-              </label>
-            </div>
+              <span className="ml-2 text-yellow-400 text-sm sm:text-base">
+                {'★'.repeat(rating)}{'☆'.repeat(5 - rating)}
+              </span>
+              <span className="ml-2 text-gray-600 text-xs sm:text-sm group-hover:text-gray-900 transition-colors">
+                & above
+              </span>
+            </label>
           ))}
         </div>
       </div>
 
-      {/* Active Filters */}
-      {Object.values(filters).some(
-        (value) =>
-          (Array.isArray(value) && value.length > 0) ||
-          (!Array.isArray(value) && value)
-      ) && (
-        <div className="mt-6 pt-6 border-t">
-          <h4 className="font-medium text-gray-700 mb-3">Active Filters</h4>
-          <div className="flex flex-wrap gap-2">
-            {filters.category && (
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-primary-100 text-primary-800">
-                Category: {filters.category}
-                <button
-                  onClick={() => onFilterChange({ category: '' })}
-                  className="ml-2 text-primary-600 hover:text-primary-800"
-                >
-                  <FaTimes size={12} />
-                </button>
-              </span>
-            )}
-            
-            {filters.brand.map((brand) => (
-              <span
-                key={brand}
-                className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800"
-              >
-                Brand: {brand}
-                <button
-                  onClick={() =>
-                    handleBrandToggle(brand)
-                  }
-                  className="ml-2 text-blue-600 hover:text-blue-800"
-                >
-                  <FaTimes size={12} />
-                </button>
-              </span>
-            ))}
-            
-            {(filters.minPrice || filters.maxPrice) && (
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-green-100 text-green-800">
-                Price: {filters.minPrice || 0} - {filters.maxPrice || '∞'}
-                <button
-                  onClick={() => handlePriceChange('', '')}
-                  className="ml-2 text-green-600 hover:text-green-800"
-                >
-                  <FaTimes size={12} />
-                </button>
-              </span>
-            )}
-            
-            {filters.rating && (
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-yellow-100 text-yellow-800">
-                Rating: {filters.rating}+
-                <button
-                  onClick={() => handleRatingChange('')}
-                  className="ml-2 text-yellow-600 hover:text-yellow-800"
-                >
-                  <FaTimes size={12} />
-                </button>
-              </span>
-            )}
-          </div>
+      {/* Mobile Apply Button */}
+      {isMobile && (
+        <div className="mt-6 pt-4 border-t">
+          <button
+            onClick={() => onClearFilters()}
+            className="w-full bg-gray-100 text-gray-700 py-3 rounded-lg font-medium mb-3 transition-colors hover:bg-gray-200"
+          >
+            Clear Filters
+          </button>
+          <button
+            onClick={() => {
+              // Apply filters logic would be here
+              // For now, just close the filter
+              const event = new Event('closeFilters');
+              window.dispatchEvent(event);
+            }}
+            className="w-full bg-primary-500 text-white py-3 rounded-lg font-medium transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
+          >
+            Apply Filters
+          </button>
         </div>
       )}
     </div>

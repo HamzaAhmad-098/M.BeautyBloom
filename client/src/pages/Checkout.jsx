@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { saveShippingAddress, savePaymentMethod, clearCart as clearCartAction } from '../store/slices/cartSlice';
-import { createOrder } from '../store/slices/orderSlice';
+import { saveShippingAddress, savePaymentMethod, clearCart as clearCartAction } from '../store/slices/cartSlice.js';
+import { createOrder } from '../store/slices/orderSlice.js';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 

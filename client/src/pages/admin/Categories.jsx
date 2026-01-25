@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FaSearch, FaPlus, FaEdit, FaTrash, FaBox, FaImage, FaSpinner } from 'react-icons/fa';
-import { adminCategoryApi, adminProductApi } from '@/services/adminApi';
+import { adminCategoryApi, adminProductApi } from '@/services/adminApi.js';
 import { toast } from 'react-toastify';
 
 const Categories = () => {

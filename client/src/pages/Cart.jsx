@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import { removeItem, updateQuantity, clearCart } from '../store/slices/cartSlice';
+import { removeItem, updateQuantity, clearCart } from '../store/slices/cartSlice.js';
 import { FaTrash, FaPlus, FaMinus, FaShoppingBag } from 'react-icons/fa';
 
 const Cart = () => {

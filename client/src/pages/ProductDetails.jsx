@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { addToCart } from '../store/slices/cartSlice';
-import { fetchProductById } from '../store/slices/productSlice';
+import { fetchProductById } from '../store/slices/productSlice.js';
 import { FaStar, FaShippingFast, FaShieldAlt, FaUndo, FaHeart, FaShareAlt, FaMinus, FaPlus, FaCheck } from 'react-icons/fa';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';

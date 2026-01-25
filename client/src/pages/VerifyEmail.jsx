@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
-import { verifyEmail, resendVerification } from '@/store/slices/authSlice';
+import { verifyEmail, resendVerification } from '@/store/slices/authSlice.js';
 import { FaEnvelope, FaCheckCircle, FaClock, FaPaperPlane } from 'react-icons/fa';
 
 const VerifyEmail = () => {
