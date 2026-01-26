@@ -5,11 +5,22 @@ import { toast } from 'react-hot-toast';
 // API URLs - Use environment variable or relative URL
 const API_URL = process.env.REACT_APP_API_URL || '/api';
 
-// Helper to get user from storage
+// Update getUserFromStorage function
 const getUserFromStorage = () => {
   try {
     const userInfo = localStorage.getItem('userInfo');
-    return userInfo ? JSON.parse(userInfo) : null;
+    const parsedUser = userInfo ? JSON.parse(userInfo) : null;
+    
+    // Don't allow login if not verified
+    if (parsedUser && !parsedUser.isVerified) {
+      localStorage.removeItem('userInfo');
+      localStorage.removeItem('token');
+      // Move to unverified storage
+      localStorage.setItem('unverifiedUser', JSON.stringify(parsedUser));
+      return null;
+    }
+    
+    return parsedUser;
   } catch (error) {
     console.error('Error parsing user info:', error);
     return null;
@@ -84,6 +95,7 @@ export const register = createAsyncThunk(
   }
 );
 
+// In the login async thunk, add email verification check
 export const login = createAsyncThunk(
   'auth/login',
   async ({ email, password, rememberMe = false }, { rejectWithValue }) => {
@@ -102,10 +114,23 @@ export const login = createAsyncThunk(
         user.isAdmin = user.role === 'admin' || false;
       }
       
-      // Save token and user info
+      // CHECK IF EMAIL IS VERIFIED - NEW CODE
+      if (!user.isVerified) {
+        // Save user info without token to show verification page
+        localStorage.setItem('unverifiedUser', JSON.stringify(user));
+        localStorage.removeItem('token');
+        delete axios.defaults.headers.common['Authorization'];
+        
+        return rejectWithValue('Please verify your email before logging in. You will be redirected to verification page.');
+      }
+      
+      // Save token and user info (only if verified)
       localStorage.setItem('userInfo', JSON.stringify(user));
       localStorage.setItem('token', data.token);
       setAuthHeaders(data.token);
+      
+      // Remove unverified user data if exists
+      localStorage.removeItem('unverifiedUser');
       
       // Set remember me flag
       if (rememberMe) {
@@ -129,7 +154,6 @@ export const login = createAsyncThunk(
     }
   }
 );
-
 export const logout = createAsyncThunk(
   'auth/logout',
   async (_, { rejectWithValue }) => {

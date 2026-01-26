@@ -7,6 +7,7 @@ import { Toaster } from 'react-hot-toast';
 
 // Layout
 import Layout from './components/layout/Layout';
+import ScrollToTop from './components/common/ScrollToTop';
 
 // Auth Components
 import ProtectedRoute, { GuestRoute, VerifiedRoute, AdminRoute } from './components/common/ProtectedRoute';
@@ -53,7 +54,6 @@ import AdminCategories from './pages/admin/Categories';
 import ProductForm from './pages/admin/ProductForm';
 import ProductDetail from './pages/admin/ProductDetail';
 
-
 function App() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -75,11 +75,11 @@ function App() {
       const mobile = window.innerWidth < 1024;
       setIsMobile(mobile);
       
-      // Add mobile scroll class to body
+      // Add mobile classes to body for CSS targeting
       if (mobile) {
-        document.body.classList.add('mobile-scroll');
+        document.body.classList.add('mobile-scroll', 'is-mobile');
       } else {
-        document.body.classList.remove('mobile-scroll');
+        document.body.classList.remove('mobile-scroll', 'is-mobile');
       }
     };
     
@@ -88,39 +88,9 @@ function App() {
     
     return () => {
       window.removeEventListener('resize', checkMobile);
-      document.body.classList.remove('mobile-scroll');
+      document.body.classList.remove('mobile-scroll', 'is-mobile');
     };
   }, []);
-
-  // Check authentication on app load
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token && !isAuthenticated) {
-      dispatch(getMe());
-    }
-  }, [dispatch, isAuthenticated]);
-
-  // Check for mobile device
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    
-    // Add mobile class to body for CSS targeting
-    if (isMobile) {
-      document.body.classList.add('is-mobile');
-    } else {
-      document.body.classList.remove('is-mobile');
-    }
-    
-    return () => {
-      window.removeEventListener('resize', checkMobile);
-      document.body.classList.remove('is-mobile');
-    };
-  }, [isMobile]);
 
   // Auto-redirect admin from homepage to admin dashboard
   useEffect(() => {
@@ -132,6 +102,8 @@ function App() {
 
   return (
     <>
+      {/* Scroll to top on route change */}
+      <ScrollToTop />
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<Layout isMobile={isMobile} />}>
@@ -261,7 +233,6 @@ function App() {
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
-
       {/* Toast notifications */}
       <Toaster
         position={isMobile ? "top-center" : "top-right"}

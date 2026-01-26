@@ -39,30 +39,21 @@
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     
-    <!-- Service Worker (for PWA) -->
+    <!-- Service Worker (for PWA) - FIXED -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
+          // Try to register service worker but don't break if it fails
           navigator.serviceWorker.register('/sw.js')
             .then(registration => {
-              console.log('ServiceWorker registration successful');
+              console.log('ServiceWorker registered successfully:', registration);
             })
             .catch(err => {
-              console.log('ServiceWorker registration failed: ', err);
+              console.log('ServiceWorker registration failed:', err);
+              // Don't show error - it's normal in development
             });
         });
       }
     </script>
-    
-    <!-- Google Analytics (Optional) -->
-    <!--
-    <script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'GA_MEASUREMENT_ID');
-    </script>
-    -->
   </body>
 </html>

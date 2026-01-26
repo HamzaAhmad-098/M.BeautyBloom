@@ -57,7 +57,7 @@ const OrderConfirmation = () => {
   
   const handleWhatsAppSupport = () => {
     const message = `Hello, I need support for my order #${orderId}`;
-    const url = `https://wa.me/923001234567?text=${encodeURIComponent(message)}`;
+    const url = `https://wa.me/923214203402?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
   };
   
@@ -310,13 +310,6 @@ const OrderConfirmation = () => {
             
             {/* Action Buttons */}
             <div className="space-y-3">
-              <button
-                onClick={handlePrint}
-                className="w-full flex items-center justify-center px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <FaPrint className="mr-2" />
-                Print Invoice
-              </button>
               
               <button
                 onClick={handleWhatsAppSupport}
@@ -339,8 +332,8 @@ const OrderConfirmation = () => {
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <h4 className="font-semibold text-blue-800 mb-2">Need Help?</h4>
               <ul className="text-sm text-blue-700 space-y-1">
-                <li>• Call us: 0300-1234567</li>
-                <li>• Email: support@cosmetics.com</li>
+                <li>• Call us: 0321-4203402</li>
+                <li>• Email: hamzaxdevelopers1223.com</li>
                 <li>• Live chat available 24/7</li>
               </ul>
             </div>

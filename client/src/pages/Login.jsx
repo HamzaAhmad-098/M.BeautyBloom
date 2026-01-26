@@ -31,7 +31,19 @@ const Login = () => {
       redirect
     });
   }, [loading, authError, userInfo, isAuthenticated, redirect]);
-
+  useEffect(() => {
+    // Check if user is unverified and redirect to verification
+    const unverifiedUser = localStorage.getItem('unverifiedUser');
+    if (unverifiedUser && !userInfo?.isVerified) {
+      try {
+        const parsedUser = JSON.parse(unverifiedUser);
+        console.log('Found unverified user, redirecting to verification');
+        navigate('/verify-email');
+      } catch (e) {
+        localStorage.removeItem('unverifiedUser');
+      }
+    }
+  }, [userInfo, navigate]);
   // Handle login redirection
   useEffect(() => {
     console.log('Checking authentication...');
@@ -60,43 +72,53 @@ const Login = () => {
     }
   }, [isAuthenticated, userInfo, navigate, redirect]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLocalError('');
+// In the handleSubmit function, add verification check
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setLocalError('');
+  
+  // Validate inputs
+  if (!email || !password) {
+    setLocalError('Please enter both email and password');
+    return;
+  }
+  
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    setLocalError('Please enter a valid email address');
+    return;
+  }
+  
+  console.log('Attempting login with:', { email, rememberMe });
+  
+  try {
+    // Dispatch login action
+    const resultAction = await dispatch(login({ email, password, rememberMe }));
     
-    // Validate inputs
-    if (!email || !password) {
-      setLocalError('Please enter both email and password');
-      return;
-    }
-    
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setLocalError('Please enter a valid email address');
-      return;
-    }
-    
-    console.log('Attempting login with:', { email, rememberMe });
-    
-    try {
-      // Dispatch login action
-      const resultAction = await dispatch(login({ email, password, rememberMe }));
+    // Check if login was successful
+    if (login.fulfilled.match(resultAction)) {
+      console.log('Login successful:', resultAction.payload);
+      // The useEffect will handle redirection
+    } else if (login.rejected.match(resultAction)) {
+      const errorMsg = resultAction.payload || resultAction.error?.message || 'Login failed';
+      setLocalError(errorMsg);
+      console.error('Login failed:', resultAction.error);
       
-      // Check if login was successful
-      if (login.fulfilled.match(resultAction)) {
-        console.log('Login successful:', resultAction.payload);
-        // The useEffect will handle redirection
-      } else if (login.rejected.match(resultAction)) {
-        const errorMsg = resultAction.payload || resultAction.error?.message || 'Login failed';
-        setLocalError(errorMsg);
-        console.error('Login failed:', resultAction.error);
+      // If error is about email verification, redirect to verification page
+      if (errorMsg.includes('verify your email')) {
+        // Try to get user info from localStorage
+        const storedEmail = email;
+        setTimeout(() => {
+          navigate('/verify-email');
+        }, 2000);
       }
-    } catch (error) {
-      console.error('Login error:', error);
-      setLocalError('An unexpected error occurred. Please try again.');
     }
-  };
+  } catch (error) {
+    console.error('Login error:', error);
+    setLocalError('An unexpected error occurred. Please try again.');
+  }
+};
 
   // Show loading state
   if (loading) {

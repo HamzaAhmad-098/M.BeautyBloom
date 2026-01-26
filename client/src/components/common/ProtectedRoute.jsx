@@ -1,15 +1,31 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { selectCurrentUser, selectIsAuthenticated } from '../../store/slices/authSlice';
+import { useEffect } from 'react';
 
+// Regular protected route (any authenticated user)
 // Regular protected route (any authenticated user)
 const ProtectedRoute = ({ children }) => {
   const userInfo = useSelector(selectCurrentUser);
   const isAuthenticated = useSelector(selectIsAuthenticated);
   const location = useLocation();
 
+  useEffect(() => {
+    // Check for token expiration
+    const token = localStorage.getItem('token');
+    if (!token && isAuthenticated) {
+      toast.error('Your session has expired. Please login again.');
+    }
+  }, [isAuthenticated]);
+
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    // Store the current location to redirect back after login
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  }
+
+  // Redirect to verification page if not verified (except for verification page itself)
+  if (!userInfo?.isVerified && location.pathname !== '/verify-email') {
+    return <Navigate to="/verify-email" replace />;
   }
 
   return children;

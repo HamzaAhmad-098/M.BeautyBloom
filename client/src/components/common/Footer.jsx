@@ -3,7 +3,6 @@ import { FaFacebook, FaInstagram, FaTwitter, FaYoutube, FaPhone, FaEnvelope, FaM
 import { useState, useEffect } from 'react';
 import { SiTiktok } from 'react-icons/si';
 
-
 const Footer = () => {
   const [showScrollTop, setShowScrollTop] = useState(false);
 
@@ -19,6 +18,11 @@ const Footer = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Function to handle all footer link clicks
+  const handleFooterLinkClick = () => {
+    scrollToTop();
+  };
+
   const quickLinks = [
     { name: 'Home', path: '/' },
     { name: 'Shop', path: '/shop' },
@@ -31,7 +35,7 @@ const Footer = () => {
     { name: 'Track Your Order', path: '/track-order' },
     { name: 'Shipping Policy', path: '/shipping' },
     { name: 'Return Policy', path: '/returns' },
-    { name: 'Privacy Policy', path: '/privacy-policy' },
+    { name: 'Privacy Policy', path: '/privacy' },
     { name: 'Terms & Conditions', path: '/terms' },
   ];
 
@@ -41,6 +45,7 @@ const Footer = () => {
     { name: 'Haircare', path: '/shop?category=haircare' },
     { name: 'Fragrance', path: '/shop?category=fragrance' },
   ];
+  
 
   return (
     <footer className="bg-gray-900 text-white pt-12 pb-6 animate-fade-in">
@@ -95,6 +100,7 @@ const Footer = () => {
                 <li key={link.name}>
                   <Link
                     to={link.path}
+                    onClick={handleFooterLinkClick}
                     className="text-gray-400 hover:text-white transition-colors text-sm sm:text-base"
                   >
                     {link.name}
@@ -112,6 +118,7 @@ const Footer = () => {
                 <li key={link.name}>
                   <Link
                     to={link.path}
+                    onClick={handleFooterLinkClick}
                     className="text-gray-400 hover:text-white transition-colors text-sm sm:text-base"
                   >
                     {link.name}
@@ -140,6 +147,7 @@ const Footer = () => {
                 </span>
               </li>
             </ul>
+        
         <div className="border-t border-gray-800 mt-8 pt-6">
           <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
             <p className="text-gray-400 text-sm text-center md:text-left">
@@ -172,7 +180,6 @@ const Footer = () => {
             </div>
           </div>
         </div>
-
       </div>
     </footer>
   );
