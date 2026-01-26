@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
 import { FaFacebook, FaInstagram, FaTwitter, FaYoutube, FaPhone, FaEnvelope, FaMapMarkerAlt, FaArrowUp } from 'react-icons/fa';
 import { useState, useEffect } from 'react';
+import { SiTiktok } from 'react-icons/si';
+
 
 const Footer = () => {
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -62,18 +64,15 @@ const Footer = () => {
                 <span className="text-white font-bold text-2xl">💄</span>
               </div>
               <div>
-                <h2 className="text-2xl font-bold">Cosmetics</h2>
+                <h2 className="text-2xl font-bold">M.BeautyBloom</h2>
                 <p className="text-sm text-gray-400">Premium Beauty Store</p>
               </div>
             </div>
             <p className="text-gray-400 mb-6 text-sm sm:text-base">
-              Your one-stop destination for premium cosmetics, skincare, and haircare products.
+              Your one-stop destination for premium cosmetics, skincare, Gift Center, Bonquet, and haircare products.
             </p>
             <div className="flex space-x-4">
-              <a href="#" className="text-gray-400 hover:text-white transition-colors p-2">
-                <FaFacebook size={20} />
-              </a>
-              <a href="#" className="text-gray-400 hover:text-white transition-colors p-2">
+              <a href="https://www.instagram.com/manibhai_000?igsh=dW13M2UzdnR6ajFn" className="text-gray-400 hover:text-white transition-colors p-2">
                 <FaInstagram size={20} />
               </a>
               <a href="#" className="text-gray-400 hover:text-white transition-colors p-2">
@@ -81,6 +80,9 @@ const Footer = () => {
               </a>
               <a href="#" className="text-gray-400 hover:text-white transition-colors p-2">
                 <FaYoutube size={20} />
+              </a>
+              <a href="https://tiktok.com/@manibhai_00" className="text-gray-400 hover:text-white transition-colors p-2">
+                <SiTiktok size={20} />
               </a>
             </div>
           </div>
@@ -125,19 +127,32 @@ const Footer = () => {
             <ul className="space-y-3">
               <li className="flex items-center space-x-3 text-gray-400">
                 <FaPhone className="text-primary-500 flex-shrink-0" />
-                <span className="text-sm sm:text-base">+92 300 1234567</span>
+                <span className="text-sm sm:text-base">03214203402</span>
               </li>
               <li className="flex items-center space-x-3 text-gray-400">
                 <FaEnvelope className="text-primary-500 flex-shrink-0" />
-                <span className="text-sm sm:text-base">support@cosmeticsstore.com</span>
+                <span className="text-sm sm:text-base">hamzaxdevelopers1223@gmail.com</span>
               </li>
               <li className="flex items-start space-x-3 text-gray-400">
                 <FaMapMarkerAlt className="text-primary-500 mt-1 flex-shrink-0" />
                 <span className="text-sm sm:text-base">
-                  DHA Phase 5, Karachi<br />Pakistan
+                  Urdu Bazaar Near Goga Garments, Kasur  <br />Punjab Pakistan
                 </span>
               </li>
             </ul>
+        <div className="border-t border-gray-800 mt-8 pt-6">
+          <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
+            <p className="text-gray-400 text-sm text-center md:text-left">
+              © {new Date().getFullYear()} Powered by HamzaXDevelopers. All rights reserved. (Contact: 03297474472)
+            </p>
+            <div className="flex items-center flex-wrap justify-center gap-4">
+              <div className="text-xs bg-gray-800 px-2 py-1 rounded">COD</div>
+              <div className="text-xs bg-gray-800 px-2 py-1 rounded">JazzCash</div>
+              <div className="text-xs bg-gray-800 px-2 py-1 rounded">Easypaisa</div>
+              <div className="text-xs bg-gray-800 px-2 py-1 rounded">Card</div>
+            </div>
+          </div>
+        </div>
 
             <div className="mt-6">
               <h4 className="font-semibold mb-3">Newsletter</h4>
@@ -158,19 +173,6 @@ const Footer = () => {
           </div>
         </div>
 
-        <div className="border-t border-gray-800 mt-8 pt-6">
-          <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
-            <p className="text-gray-400 text-sm text-center md:text-left">
-              © {new Date().getFullYear()} Cosmetics Store. All rights reserved.
-            </p>
-            <div className="flex items-center flex-wrap justify-center gap-4">
-              <div className="text-xs bg-gray-800 px-2 py-1 rounded">COD</div>
-              <div className="text-xs bg-gray-800 px-2 py-1 rounded">JazzCash</div>
-              <div className="text-xs bg-gray-800 px-2 py-1 rounded">Easypaisa</div>
-              <div className="text-xs bg-gray-800 px-2 py-1 rounded">Card</div>
-            </div>
-          </div>
-        </div>
       </div>
     </footer>
   );

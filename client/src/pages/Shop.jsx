@@ -3,7 +3,8 @@ import { useSearchParams, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import ProductCard from '../components/product/ProductCard';
 import ProductFilter from '../components/product/ProductFilter';
-import { FaFilter, FaTimes } from 'react-icons/fa';
+import { FaFilter, FaTimes, FaSearch } from 'react-icons/fa';
+import { toast } from 'react-hot-toast';
 
 const Shop = () => {
   const [products, setProducts] = useState([]);
@@ -45,12 +46,14 @@ const Shop = () => {
       search,
     });
     setCurrentPage(parseInt(page));
-  }, [location.search]);
+  }, [location.search, searchParams]);
 
   useEffect(() => {
     const fetchProducts = async () => {
       setLoading(true);
       try {
+        console.log('Fetching products with filters:', filters);
+        
         const params = new URLSearchParams();
         
         if (filters.category) params.append('category', filters.category);
@@ -63,11 +66,41 @@ const Shop = () => {
         params.append('pageNumber', currentPage);
         params.append('pageSize', 12);
 
+        // Replace with your actual API endpoint
         const response = await axios.get(`/api/products?${params}`);
-        setProducts(response.data.products || response.data);
+        
+        console.log('Products response:', response.data);
+        
+        // Handle different response structures
+        const productsData = response.data.products || response.data || [];
+        
+        // Process products to add image URLs for UploadCare
+        const processedProducts = Array.isArray(productsData) 
+          ? productsData.map(product => {
+              // Create a copy of the product
+              const processedProduct = { ...product };
+              
+              // If product has images with public_id, create the full image URL
+              if (product.images && product.images.length > 0 && product.images[0].public_id) {
+                const publicId = product.images[0].public_id.startsWith('/') 
+                  ? product.images[0].public_id.substring(1) 
+                  : product.images[0].public_id;
+                
+                // Add the constructed URL to the product object
+                processedProduct.fullImageUrl = `https://s2vbpeuic7.ucarecd.net/${publicId}/-/preview/872x1000/`;
+              }
+              
+              return processedProduct;
+            })
+          : [];
+        
+        setProducts(processedProducts);
         setTotalPages(response.data.pages || 1);
+        
       } catch (error) {
         console.error('Error fetching products:', error);
+        toast.error('Failed to load products');
+        setProducts([]);
       } finally {
         setLoading(false);
       }
@@ -77,13 +110,14 @@ const Shop = () => {
   }, [filters, currentPage]);
 
   const handleFilterChange = (newFilters) => {
-    setFilters({ ...filters, ...newFilters, page: 1 });
+    const updatedFilters = { ...filters, ...newFilters };
+    setFilters(updatedFilters);
     setCurrentPage(1);
     
     // Update URL
     const params = new URLSearchParams();
-    Object.entries(newFilters).forEach(([key, value]) => {
-      if (value) {
+    Object.entries(updatedFilters).forEach(([key, value]) => {
+      if (value && value !== '') {
         if (Array.isArray(value)) {
           if (value.length > 0) params.set(key, value.join(','));
         } else {
@@ -91,6 +125,7 @@ const Shop = () => {
         }
       }
     });
+    params.set('page', '1');
     setSearchParams(params);
   };
 
@@ -113,69 +148,83 @@ const Shop = () => {
       search: '',
     });
     setSearchParams({});
+    setCurrentPage(1);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-6 px-4 animate-fade-in">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
-            {filters.category ? `${filters.category}` : 'All Products'}
+        <div className="mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+            {filters.category ? `${filters.category} Products` : 'All Products'}
           </h1>
           <p className="text-gray-600 mt-2">
             {loading ? 'Loading products...' : `${products.length} products found`}
           </p>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-8">
-          {/* Sidebar Filters - Desktop */}
-          <div className="hidden lg:block w-64 flex-shrink-0">
-            <ProductFilter
-              filters={filters}
-              onFilterChange={handleFilterChange}
-              onClearFilters={clearFilters}
-            />
-          </div>
-
+        <div className="flex flex-col lg:flex-row gap-6">
           {/* Mobile Filter Button */}
-          <div className="lg:hidden mb-4">
+          <div className="lg:hidden">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center space-x-2 bg-white px-4 py-2 rounded-lg shadow"
+              className="flex items-center justify-center space-x-2 bg-white px-4 py-3 rounded-lg shadow w-full hover:shadow-md transition-shadow mobile-tap-target"
             >
               {showFilters ? <FaTimes /> : <FaFilter />}
               <span>{showFilters ? 'Hide Filters' : 'Show Filters'}</span>
+              <span className="ml-auto text-xs bg-primary-100 text-primary-600 px-2 py-1 rounded-full">
+                {Object.values(filters).filter(v => v && (Array.isArray(v) ? v.length > 0 : v !== '')).length}
+              </span>
             </button>
           </div>
 
           {/* Mobile Filters */}
           {showFilters && (
-            <div className="lg:hidden mb-6">
+            <div className="lg:hidden mb-6 animate-slide-in">
+              <div className="bg-white rounded-lg shadow p-4">
+                <ProductFilter
+                  filters={filters}
+                  onFilterChange={handleFilterChange}
+                  onClearFilters={clearFilters}
+                  isMobile={true}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Sidebar Filters - Desktop */}
+          <div className="hidden lg:block w-64 flex-shrink-0">
+            <div className="bg-white rounded-lg shadow p-4 sticky top-24">
               <ProductFilter
                 filters={filters}
                 onFilterChange={handleFilterChange}
                 onClearFilters={clearFilters}
               />
             </div>
-          )}
+          </div>
 
           {/* Main Content */}
           <div className="flex-1">
             {/* Sort Bar */}
             <div className="bg-white rounded-lg shadow p-4 mb-6">
               <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div>
-                  <span className="text-gray-600">
-                    Page {currentPage} of {totalPages}
-                  </span>
+                <div className="flex items-center space-x-2">
+                  <FaSearch className="text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search products..."
+                    value={filters.search}
+                    onChange={(e) => handleFilterChange({ search: e.target.value })}
+                    className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 w-full sm:w-64"
+                  />
                 </div>
                 <div className="flex items-center space-x-4">
-                  <span className="text-gray-600">Sort by:</span>
+                  <span className="text-gray-600 hidden sm:block">Sort by:</span>
                   <select
                     value={filters.sort}
                     onChange={(e) => handleFilterChange({ sort: e.target.value })}
-                    className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 w-full sm:w-auto"
                   >
                     <option value="newest">Newest</option>
                     <option value="price-low">Price: Low to High</option>
@@ -189,32 +238,37 @@ const Shop = () => {
 
             {/* Products Grid */}
             {loading ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                  <div key={i} className="bg-gray-100 rounded-lg h-80 animate-pulse"></div>
+              <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="bg-gray-100 rounded-lg h-64 sm:h-72 animate-pulse"></div>
                 ))}
               </div>
             ) : products.length === 0 ? (
-              <div className="text-center py-16">
+              <div className="text-center py-12">
                 <div className="text-gray-400 mb-4">
                   <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
                 <h3 className="text-xl font-semibold text-gray-700 mb-2">No products found</h3>
-                <p className="text-gray-500 mb-6">Try adjusting your filters or search term</p>
+                <p className="text-gray-500 mb-6 max-w-md mx-auto">
+                  Try adjusting your filters or search term. We might not have what you're looking for yet.
+                </p>
                 <button
                   onClick={clearFilters}
-                  className="bg-primary-500 hover:bg-primary-600 text-white px-6 py-2 rounded-md"
+                  className="bg-gradient-to-r from-primary-500 to-primary-600 hover:opacity-90 text-white px-6 py-2 rounded-lg font-medium transition-colors mobile-tap-target"
                 >
                   Clear All Filters
                 </button>
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
                   {products.map((product) => (
-                    <ProductCard key={product._id} product={product} />
+                    <ProductCard 
+                      key={product._id || product.id} 
+                      product={product} 
+                    />
                   ))}
                 </div>
 
@@ -225,7 +279,7 @@ const Shop = () => {
                       <button
                         onClick={() => handlePageChange(currentPage - 1)}
                         disabled={currentPage === 1}
-                        className="px-3 py-2 rounded-md border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-4 py-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 mobile-tap-target"
                       >
                         Previous
                       </button>
@@ -246,9 +300,9 @@ const Shop = () => {
                           <button
                             key={pageNum}
                             onClick={() => handlePageChange(pageNum)}
-                            className={`px-3 py-2 rounded-md ${
+                            className={`px-4 py-2 rounded-lg mobile-tap-target ${
                               currentPage === pageNum
-                                ? 'bg-primary-500 text-white'
+                                ? 'bg-primary-500 text-white shadow-md'
                                 : 'border border-gray-300 hover:bg-gray-50'
                             }`}
                           >
@@ -260,7 +314,7 @@ const Shop = () => {
                       <button
                         onClick={() => handlePageChange(currentPage + 1)}
                         disabled={currentPage === totalPages}
-                        className="px-3 py-2 rounded-md border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-4 py-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 mobile-tap-target"
                       >
                         Next
                       </button>

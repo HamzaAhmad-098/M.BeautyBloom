@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import emailjs from '@emailjs/browser';
 import { FaPhone, FaEnvelope, FaMapMarkerAlt, FaClock, FaFacebook, FaInstagram, FaTwitter, FaWhatsapp } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
+import { SiTiktok } from 'react-icons/si';
 
 const Contact = () => {
   const [formData, setFormData] = useState({
@@ -13,6 +15,14 @@ const Contact = () => {
 
   const [loading, setLoading] = useState(false);
 
+  // Replace these with your EmailJS credentials
+  const EMAILJS_SERVICE_ID = 'service_msz3srq'; // Get from EmailJS dashboard
+  const EMAILJS_TEMPLATE_ID = 'template_pdjvz1l'; // Get from EmailJS dashboard
+  const EMAILJS_PUBLIC_KEY = 'X-eQZUioHuL8ihsHf'; // Get from EmailJS dashboard
+
+  // Initialize EmailJS with your public key
+  emailjs.init(EMAILJS_PUBLIC_KEY);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -21,38 +31,134 @@ const Contact = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    
-    // Simulate API call
-    setTimeout(() => {
-      toast.success('Message sent successfully! We\'ll get back to you soon.');
-      setFormData({
-        name: '',
-        email: '',
-        phone: '',
-        subject: '',
-        message: '',
-      });
+
+    try {
+      // Validate form
+      if (!formData.name || !formData.email || !formData.subject || !formData.message) {
+        toast.error('Please fill all required fields');
+        setLoading(false);
+        return;
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        toast.error('Please enter a valid email address');
+        setLoading(false);
+        return;
+      }
+
+      // Prepare template parameters for EmailJS
+      const templateParams = {
+        from_name: formData.name,
+        from_email: formData.email,
+        phone: formData.phone || 'Not provided',
+        subject: formData.subject,
+        message: formData.message,
+        to_email: 'hamzaxdevelopers1223@gmail.com', // Your email address
+        date: new Date().toLocaleString(),
+      };
+
+      // Send email using EmailJS
+      const result = await emailjs.send(
+        EMAILJS_SERVICE_ID,
+        EMAILJS_TEMPLATE_ID,
+        templateParams
+      );
+
+      if (result.status === 200) {
+        toast.success('Message sent successfully! We\'ll get back to you soon.');
+        // Reset form
+        setFormData({
+          name: '',
+          email: '',
+          phone: '',
+          subject: '',
+          message: '',
+        });
+      } else {
+        throw new Error('Failed to send email');
+      }
+    } catch (error) {
+      console.error('Error sending email:', error);
+      toast.error('Failed to send message. Please try again later.');
+    } finally {
       setLoading(false);
-    }, 1500);
+    }
+  };
+
+  // Alternative: Send email via your own backend (more secure)
+  const handleSubmitViaBackend = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      // Validate form
+      if (!formData.name || !formData.email || !formData.subject || !formData.message) {
+        toast.error('Please fill all required fields');
+        setLoading(false);
+        return;
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        toast.error('Please enter a valid email address');
+        setLoading(false);
+        return;
+      }
+
+      // Call your backend API
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...formData,
+          to: 'hamzaxdevelopers1223@gmail.com', // Your email
+          date: new Date().toISOString(),
+        }),
+      });
+
+      if (response.ok) {
+        toast.success('Message sent successfully! We\'ll get back to you soon.');
+        // Reset form
+        setFormData({
+          name: '',
+          email: '',
+          phone: '',
+          subject: '',
+          message: '',
+        });
+      } else {
+        throw new Error('Failed to send message');
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast.error('Failed to send message. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const contactInfo = [
     {
       icon: <FaPhone />,
       title: 'Phone',
-      details: ['+92 300 1234567', '+92 321 1234567'],
+      details: ['+92 3214203402', '+923086585333'],
       color: 'text-blue-600 bg-blue-50',
     },
     {
       icon: <FaEnvelope />,
       title: 'Email',
-      details: ['support@cosmeticsstore.com', 'sales@cosmeticsstore.com'],
+      details: ['hamzaxdevelopers1223@gmail.com', 'jhaji1223@gmail.com'],
       color: 'text-red-600 bg-red-50',
     },
     {
       icon: <FaMapMarkerAlt />,
       title: 'Address',
-      details: ['DHA Phase 5, Karachi', 'Pakistan'],
+      details: ['Urdu Bazaar Near Goga Fabrics, Kasur', 'Punjab Pakistan'],
       color: 'text-green-600 bg-green-50',
     },
     {
@@ -113,16 +219,36 @@ const Contact = () => {
               <div className="mt-10 pt-8 border-t">
                 <h3 className="font-semibold text-gray-900 mb-4">Follow Us</h3>
                 <div className="flex space-x-4">
-                  <a href="#" className="p-3 bg-blue-100 text-blue-600 rounded-xl hover:bg-blue-200">
-                    <FaFacebook size={20} />
+                  <a 
+                    href="https://tiktok.com/@manibhai_00" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="p-3 bg-blue-100 text-blue-600 rounded-xl hover:bg-blue-200"
+                  >
+                    <SiTiktok size={20} />
                   </a>
-                  <a href="#" className="p-3 bg-pink-100 text-pink-600 rounded-xl hover:bg-pink-200">
+                  <a 
+                    href="https://www.instagram.com/manibhai_000?igsh=dW13M2UzdnR6ajFn" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="p-3 bg-pink-100 text-pink-600 rounded-xl hover:bg-pink-200"
+                  >
                     <FaInstagram size={20} />
                   </a>
-                  <a href="#" className="p-3 bg-blue-100 text-blue-400 rounded-xl hover:bg-blue-200">
+                  <a 
+                    href="#" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="p-3 bg-blue-100 text-blue-400 rounded-xl hover:bg-blue-200"
+                  >
                     <FaTwitter size={20} />
                   </a>
-                  <a href="#" className="p-3 bg-green-100 text-green-600 rounded-xl hover:bg-green-200">
+                  <a 
+                    href="https://wa.me/923214203402" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="p-3 bg-green-100 text-green-600 rounded-xl hover:bg-green-200"
+                  >
                     <FaWhatsapp size={20} />
                   </a>
                 </div>
@@ -131,7 +257,7 @@ const Contact = () => {
               {/* WhatsApp Direct */}
               <div className="mt-8">
                 <a
-                  href="https://wa.me/923001234567"
+                  href="https://wa.me/923086585333"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-center space-x-2 bg-green-500 hover:bg-green-600 text-white py-3 px-6 rounded-xl font-semibold"
@@ -151,7 +277,7 @@ const Contact = () => {
                 Fill out the form below and we'll get back to you as soon as possible.
               </p>
 
-              <form onSubmit={handleSubmit}>
+              <form onSubmit={handleSubmit} id="contact-form">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -238,9 +364,19 @@ const Contact = () => {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="bg-primary-500 hover:bg-primary-600 text-white py-3 px-8 rounded-xl font-semibold text-lg disabled:opacity-50"
+                    className="bg-primary-500 hover:bg-primary-600 text-white py-3 px-8 rounded-xl font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
-                    {loading ? 'Sending...' : 'Send Message'}
+                    {loading ? (
+                      <>
+                        <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Sending...
+                      </>
+                    ) : (
+                      'Send Message'
+                    )}
                   </button>
                 </div>
               </form>
@@ -279,42 +415,98 @@ const Contact = () => {
         </div>
 
         {/* Map Section */}
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-          <div className="grid grid-cols-1 md:grid-cols-3">
-            <div className="md:col-span-2">
-              <div className="h-96 bg-gray-200 relative">
-                {/* This would be a real Google Map in production */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-6xl mb-4">📍</div>
-                    <h3 className="text-xl font-bold">Our Location</h3>
-                    <p className="text-gray-600">DHA Phase 5, Karachi, Pakistan</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="p-8">
-              <h3 className="text-xl font-bold mb-4">Visit Our Store</h3>
-              <div className="space-y-3">
-                <p className="text-gray-600">
-                  <strong>Address:</strong> DHA Phase 5, Karachi, Pakistan
-                </p>
-                <p className="text-gray-600">
-                  <strong>Hours:</strong> 9AM - 10PM (Mon-Fri)
-                </p>
-                <p className="text-gray-600">
-                  <strong>Parking:</strong> Free parking available
-                </p>
-                <p className="text-gray-600">
-                  <strong>Facilities:</strong> AC, Fitting rooms, Expert consultation
-                </p>
-              </div>
-              <button className="mt-6 w-full bg-gray-900 hover:bg-black text-white py-3 rounded-xl font-semibold">
-                Get Directions
-              </button>
-            </div>
+<div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+  <div className="grid grid-cols-1 md:grid-cols-3">
+    <div className="md:col-span-2">
+      {/* Interactive map placeholder with link */}
+      <div className="h-96 bg-gradient-to-br from-blue-50 to-green-50 relative group cursor-pointer">
+        <a
+          href="https://www.google.com/maps/search/?api=1&query=Urdu+Bazaar+Near+Goga+Fabrics,+Kasur,+Punjab+Pakistan"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="absolute inset-0 flex flex-col items-center justify-center text-center p-8"
+        >
+          <div className="text-6xl mb-4 transition-transform group-hover:scale-110">📍</div>
+          <h3 className="text-2xl font-bold text-gray-900 mb-2">Our Location</h3>
+          <p className="text-gray-600">Click to view on Google Maps</p>
+          <div className="mt-6 bg-white/80 backdrop-blur-sm rounded-lg p-4 shadow-lg">
+            <p className="text-gray-800 font-medium">Urdu Bazaar Near Goga Fabrics</p>
+            <p className="text-gray-600">Kasur, Punjab Pakistan</p>
+          </div>
+          <div className="mt-6 inline-flex items-center gap-2 bg-blue-500 text-white px-6 py-3 rounded-full font-semibold hover:bg-blue-600 transition-colors">
+            <span>View on Google Maps</span>
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </div>
+        </a>
+      </div>
+    </div>
+    <div className="p-8">
+      <h3 className="text-xl font-bold mb-4">Visit Our Store</h3>
+      <div className="space-y-3">
+        <div className="flex items-start">
+          <div className="text-gray-500 mr-3 mt-1">📍</div>
+          <div>
+            <p className="font-medium text-gray-900">Address</p>
+            <p className="text-gray-600">Urdu Bazaar Near Goga Fabrics, Kasur, Punjab Pakistan</p>
           </div>
         </div>
+        
+        <div className="flex items-start">
+          <div className="text-gray-500 mr-3 mt-1">🕐</div>
+          <div>
+            <p className="font-medium text-gray-900">Hours</p>
+            <p className="text-gray-600">10AM - 10PM (Mon-Sun)</p>
+          </div>
+        </div>
+        
+        <div className="flex items-start">
+          <div className="text-gray-500 mr-3 mt-1">⭐</div>
+          <div>
+            <p className="font-medium text-gray-900">Facilities</p>
+            <p className="text-gray-600">Expert consultation, Full Customization Live!</p>
+          </div>
+        </div>
+      </div>
+      
+      {/* Get Directions Button */}
+      <a
+        href="https://www.google.com/maps/dir/?api=1&destination=Urdu+Bazaar+Near+Goga+Fabrics,+Kasur,+Punjab,+Pakistan"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-6 w-full bg-gray-900 hover:bg-black text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2"
+      >
+        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+          <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd" />
+        </svg>
+        Get Directions
+      </a>
+      
+      {/* Quick Links */}
+      <div className="mt-6 grid grid-cols-2 gap-3">
+        <a
+          href={`https://maps.apple.com/?q=${encodeURIComponent('Urdu Bazaar Near Goga Fabrics, Kasur, Punjab Pakistan')}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="bg-gray-100 hover:bg-gray-200 text-gray-800 py-2 px-4 rounded-lg text-center text-sm flex items-center justify-center gap-1"
+        >
+          <span>🍏</span>
+          Apple Maps
+        </a>
+        <a
+          href="https://www.google.com/maps/search/?api=1&query=Urdu+Bazaar+Near+Goga+Fabrics,+Kasur,+Punjab+Pakistan"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="bg-red-50 hover:bg-red-100 text-red-600 py-2 px-4 rounded-lg text-center text-sm flex items-center justify-center gap-1"
+        >
+          <span>G</span>
+          Google Maps
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
       </div>
     </div>
   );

@@ -2,10 +2,10 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 
-// API URLs
-const API_URL = '/api/auth';
+// API URLs - Use environment variable or relative URL
+const API_URL = process.env.REACT_APP_API_URL || '/api';
 
-// Get user from localStorage
+// Helper to get user from storage
 const getUserFromStorage = () => {
   try {
     const userInfo = localStorage.getItem('userInfo');
@@ -16,18 +16,30 @@ const getUserFromStorage = () => {
   }
 };
 
+// Helper to check if token is expired
+const isTokenExpired = (token) => {
+  if (!token) return true;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp * 1000 < Date.now();
+  } catch {
+    return true;
+  }
+};
+
 const initialState = {
   userInfo: getUserFromStorage(),
   loading: false,
   error: null,
   success: false,
-  isAuthenticated: false,
+  // Check both token existence and validity
+  isAuthenticated: !!(localStorage.getItem('token') && !isTokenExpired(localStorage.getItem('token')) && getUserFromStorage()),
   token: localStorage.getItem('token') || null,
 };
 
-// Set auth headers
+// Set auth headers globally
 const setAuthHeaders = (token) => {
-  if (token) {
+  if (token && !isTokenExpired(token)) {
     axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     localStorage.setItem('token', token);
   } else {
@@ -38,8 +50,12 @@ const setAuthHeaders = (token) => {
 
 // Initialize auth headers
 const token = localStorage.getItem('token');
-if (token) {
+if (token && !isTokenExpired(token)) {
   setAuthHeaders(token);
+} else {
+  // Clear invalid token
+  localStorage.removeItem('token');
+  localStorage.removeItem('userInfo');
 }
 
 // Async Thunks
@@ -47,18 +63,22 @@ export const register = createAsyncThunk(
   'auth/register',
   async (userData, { rejectWithValue }) => {
     try {
-      const { data } = await axios.post(`${API_URL}/register`, userData);
+      const { data } = await axios.post(`${API_URL}/auth/register`, userData);
       
       // Save token and user info
-      localStorage.setItem('userInfo', JSON.stringify(data.user));
+      localStorage.setItem('userInfo', JSON.stringify(data.user || data));
       localStorage.setItem('token', data.token);
       setAuthHeaders(data.token);
       
-      return data;
+      return {
+        user: data.user || data,
+        token: data.token,
+        message: data.message || 'Registration successful!'
+      };
     } catch (error) {
       const message = error.response?.data?.message || 
                      error.response?.data?.error || 
-                     'Registration failed';
+                     'Registration failed. Please try again.';
       return rejectWithValue(message);
     }
   }
@@ -68,27 +88,43 @@ export const login = createAsyncThunk(
   'auth/login',
   async ({ email, password, rememberMe = false }, { rejectWithValue }) => {
     try {
-      const { data } = await axios.post(`${API_URL}/login`, {
+      console.log('Attempting login to:', `${API_URL}/auth/login`);
+      const { data } = await axios.post(`${API_URL}/auth/login`, {
         email,
-        password,
-        rememberMe,
+        password
       });
       
+      console.log('Login response:', data);
+      
+      // Ensure user object has isAdmin property
+      const user = data.user || data;
+      if (!user.hasOwnProperty('isAdmin')) {
+        user.isAdmin = user.role === 'admin' || false;
+      }
+      
       // Save token and user info
-      localStorage.setItem('userInfo', JSON.stringify(data.user));
+      localStorage.setItem('userInfo', JSON.stringify(user));
       localStorage.setItem('token', data.token);
       setAuthHeaders(data.token);
       
-      // Set remember me cookie if needed
+      // Set remember me flag
       if (rememberMe) {
         localStorage.setItem('rememberMe', 'true');
+      } else {
+        localStorage.removeItem('rememberMe');
       }
       
-      return data;
+      return {
+        user,
+        token: data.token,
+        message: data.message || 'Login successful!'
+      };
     } catch (error) {
+      console.error('Login error details:', error.response?.data || error.message);
       const message = error.response?.data?.message || 
                      error.response?.data?.error || 
-                     'Login failed';
+                     error.message || 
+                     'Login failed. Please check your credentials.';
       return rejectWithValue(message);
     }
   }
@@ -98,15 +134,23 @@ export const logout = createAsyncThunk(
   'auth/logout',
   async (_, { rejectWithValue }) => {
     try {
-      await axios.post(`${API_URL}/logout`);
+      const token = localStorage.getItem('token');
+      if (token && !isTokenExpired(token)) {
+        await axios.post(`${API_URL}/auth/logout`, {}, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
     } catch (error) {
       console.error('Logout error:', error);
+      // Even if API call fails, we should still logout locally
     } finally {
       // Clear all auth data
       localStorage.removeItem('userInfo');
       localStorage.removeItem('token');
       localStorage.removeItem('guestCart');
       localStorage.removeItem('rememberMe');
+      sessionStorage.removeItem('userInfo');
+      sessionStorage.removeItem('token');
       delete axios.defaults.headers.common['Authorization'];
       
       return null;
@@ -116,18 +160,30 @@ export const logout = createAsyncThunk(
 
 export const getMe = createAsyncThunk(
   'auth/getMe',
-  async (_, { getState, rejectWithValue }) => {
+  async (_, { rejectWithValue }) => {
     try {
-      const { data } = await axios.get(`${API_URL}/me`);
-      return data.user;
+      const { data } = await axios.get(`${API_URL}/auth/me`);
+      
+      // Ensure user object has isAdmin property
+      const user = data.user || data;
+      if (!user.hasOwnProperty('isAdmin')) {
+        user.isAdmin = user.role === 'admin' || false;
+      }
+      
+      // Update localStorage
+      localStorage.setItem('userInfo', JSON.stringify(user));
+      
+      return user;
     } catch (error) {
+      console.error('Get me error:', error.response?.data || error.message);
+      
       // If token is invalid, logout
       if (error.response?.status === 401) {
         localStorage.removeItem('userInfo');
         localStorage.removeItem('token');
         delete axios.defaults.headers.common['Authorization'];
       }
-      return rejectWithValue(error.response?.data?.message || 'Failed to get user');
+      return rejectWithValue(error.response?.data?.message || 'Failed to get user profile');
     }
   }
 );
@@ -136,14 +192,23 @@ export const updateProfile = createAsyncThunk(
   'auth/updateProfile',
   async (userData, { rejectWithValue }) => {
     try {
-      const { data } = await axios.put(`${API_URL}/updatedetails`, userData);
+      const { data } = await axios.put(`${API_URL}/auth/updatedetails`, userData);
       
       // Update localStorage
       const currentUser = JSON.parse(localStorage.getItem('userInfo'));
       const updatedUser = { ...currentUser, ...data.user };
+      
+      // Ensure isAdmin property
+      if (!updatedUser.hasOwnProperty('isAdmin')) {
+        updatedUser.isAdmin = updatedUser.role === 'admin' || false;
+      }
+      
       localStorage.setItem('userInfo', JSON.stringify(updatedUser));
       
-      return data;
+      return {
+        user: updatedUser,
+        message: data.message || 'Profile updated successfully'
+      };
     } catch (error) {
       const message = error.response?.data?.message || 'Profile update failed';
       return rejectWithValue(message);
@@ -155,7 +220,7 @@ export const updatePassword = createAsyncThunk(
   'auth/updatePassword',
   async ({ currentPassword, newPassword }, { rejectWithValue }) => {
     try {
-      const { data } = await axios.put(`${API_URL}/updatepassword`, {
+      const { data } = await axios.put(`${API_URL}/auth/updatepassword`, {
         currentPassword,
         newPassword,
       });
@@ -178,7 +243,7 @@ export const forgotPassword = createAsyncThunk(
   'auth/forgotPassword',
   async (email, { rejectWithValue }) => {
     try {
-      const { data } = await axios.post(`${API_URL}/forgotpassword`, { email });
+      const { data } = await axios.post(`${API_URL}/auth/forgotpassword`, { email });
       return data;
     } catch (error) {
       const message = error.response?.data?.message || 'Password reset failed';
@@ -191,18 +256,24 @@ export const resetPassword = createAsyncThunk(
   'auth/resetPassword',
   async ({ token, password }, { rejectWithValue }) => {
     try {
-      const { data } = await axios.put(`${API_URL}/resetpassword/${token}`, {
+      const { data } = await axios.put(`${API_URL}/auth/resetpassword/${token}`, {
         password,
       });
       
-      // Auto login after password reset
+      // Auto login after password reset if token is returned
       if (data.token) {
         localStorage.setItem('token', data.token);
         setAuthHeaders(data.token);
         
         // Get user info
-        const userResponse = await axios.get(`${API_URL}/me`);
-        localStorage.setItem('userInfo', JSON.stringify(userResponse.data.user));
+        const userResponse = await axios.get(`${API_URL}/auth/me`);
+        const user = userResponse.data.user || userResponse.data;
+        
+        if (!user.hasOwnProperty('isAdmin')) {
+          user.isAdmin = user.role === 'admin' || false;
+        }
+        
+        localStorage.setItem('userInfo', JSON.stringify(user));
       }
       
       return data;
@@ -217,7 +288,7 @@ export const verifyEmail = createAsyncThunk(
   'auth/verifyEmail',
   async (token, { rejectWithValue }) => {
     try {
-      const { data } = await axios.get(`${API_URL}/verify-email/${token}`);
+      const { data } = await axios.get(`${API_URL}/auth/verify-email/${token}`);
       return data;
     } catch (error) {
       const message = error.response?.data?.message || 'Email verification failed';
@@ -230,7 +301,7 @@ export const resendVerification = createAsyncThunk(
   'auth/resendVerification',
   async (_, { rejectWithValue }) => {
     try {
-      const { data } = await axios.post(`${API_URL}/resend-verification`);
+      const { data } = await axios.post(`${API_URL}/auth/resend-verification`);
       return data;
     } catch (error) {
       const message = error.response?.data?.message || 'Failed to resend verification';
@@ -272,12 +343,12 @@ const authSlice = createSlice({
         state.token = action.payload.token;
         state.isAuthenticated = true;
         state.success = true;
-        toast.success(action.payload.message || 'Registration successful!');
+        toast.success(action.payload.message);
       })
       .addCase(register.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-        toast.error(action.payload || 'Registration failed');
+        toast.error(action.payload);
       })
       
       // Login
@@ -291,12 +362,13 @@ const authSlice = createSlice({
         state.token = action.payload.token;
         state.isAuthenticated = true;
         state.success = true;
-        toast.success(action.payload.message || 'Login successful!');
+        toast.success(action.payload.message);
       })
       .addCase(login.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-        toast.error(action.payload || 'Login failed');
+        state.isAuthenticated = false;
+        toast.error(action.payload);
       })
       
       // Logout
@@ -325,8 +397,8 @@ const authSlice = createSlice({
       
       // Update Profile
       .addCase(updateProfile.fulfilled, (state, action) => {
-        state.userInfo = { ...state.userInfo, ...action.payload.user };
-        toast.success(action.payload.message || 'Profile updated');
+        state.userInfo = action.payload.user;
+        toast.success(action.payload.message);
       })
       
       // Update Password
@@ -365,10 +437,20 @@ const authSlice = createSlice({
 
 export const { clearError, clearAuth, setUser } = authSlice.actions;
 
-// Selectors
-export const selectCurrentUser = (state) => state.auth.userInfo;
+// Enhanced Selectors
+export const selectCurrentUser = (state) => {
+  const user = state.auth.userInfo;
+  if (user && !user.hasOwnProperty('isAdmin')) {
+    user.isAdmin = user.role === 'admin' || false;
+  }
+  return user;
+};
+
 export const selectIsAuthenticated = (state) => state.auth.isAuthenticated;
-export const selectIsAdmin = (state) => state.auth.userInfo?.isAdmin || false;
+export const selectIsAdmin = (state) => {
+  const user = state.auth.userInfo;
+  return user?.isAdmin || user?.role === 'admin' || false;
+};
 export const selectIsVerified = (state) => state.auth.userInfo?.isVerified || false;
 export const selectAuthLoading = (state) => state.auth.loading;
 export const selectAuthError = (state) => state.auth.error;

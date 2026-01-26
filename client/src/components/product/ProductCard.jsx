@@ -2,23 +2,140 @@ import { Link } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { addToCart } from '../../store/slices/cartSlice';
 import { toast } from 'react-hot-toast';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { FaStar, FaShoppingCart, FaHeart, FaTag, FaImage } from 'react-icons/fa';
 
 const ProductCard = ({ product }) => {
   const dispatch = useDispatch();
+  const [imageError, setImageError] = useState(false);
+  const [imageUrl, setImageUrl] = useState('');
   const [isHovered, setIsHovered] = useState(false);
+
+  if (!product || !product._id) {
+    return null;
+  }
+
+  useEffect(() => {
+    // Construct image URL when component mounts or product changes
+    const url = constructImageUrl();
+    setImageUrl(url);
+    setImageError(false);
+  }, [product]);
 
   const handleAddToCart = (e) => {
     e.preventDefault();
     e.stopPropagation();
     
+    console.log('Adding to cart:', product._id, product.name);
+    
     dispatch(addToCart({ 
-      productId: product._id, 
+      product: product,
       quantity: 1
     }));
-    toast.success('Added to cart!');
+    
+    toast.success('Added to cart! 🛒', {
+      duration: 2000,
+      icon: '🛒'
+    });
+  };
+// ProductCard.jsx - Update the constructImageUrl function
+
+const constructImageUrl = () => {
+  console.log('Product image data:', {
+    images: product.images,
+    image: product.image,
+    public_id: product.images?.[0]?.public_id
+  });
+
+  // 1. Try UploadCare public_id first from images array
+  if (product.images && product.images.length > 0) {
+    const firstImage = product.images[0];
+    
+    // If it has public_id (UploadCare format)
+    if (firstImage.public_id) {
+      // Remove any leading slash if exists
+      const publicId = firstImage.public_id.startsWith('/') 
+        ? firstImage.public_id.substring(1) 
+        : firstImage.public_id;
+      
+      // Construct UploadCare URL with your specific dimensions
+      const uploadCareUrl = `https://s2vbpeuic7.ucarecd.net/${publicId}/-/preview/872x1000/`;
+      console.log('Generated UploadCare URL:', uploadCareUrl);
+      return uploadCareUrl;
+    }
+    
+    // If images[0] is directly a string URL (alternative format)
+    if (typeof firstImage === 'string') {
+      return firstImage;
+    }
+    
+    // If images[0] is an object with url property
+    if (firstImage.url) {
+      // Check if it's already a full URL or needs transformation
+      if (firstImage.url.includes('ucarecdn.com')) {
+        // Convert ucarecdn.com URL to your custom domain
+        const publicId = firstImage.url.replace('https://ucarecdn.com/', '').replace('/', '');
+        return `https://s2vbpeuic7.ucarecd.net/${publicId}/-/preview/872x1000/`;
+      }
+      return firstImage.url;
+    }
+  }
+
+  // 2. Try direct image property (backward compatibility)
+  if (product.image) {
+    // Check if it's already a full URL
+    if (product.image.includes('http')) {
+      return product.image;
+    }
+    
+    // If it looks like a public_id (not a full URL)
+    const publicId = product.image.startsWith('/') 
+      ? product.image.substring(1) 
+      : product.image;
+    return `https://s2vbpeuic7.ucarecd.net/${publicId}/-/preview/872x1000/`;
+  }
+
+  // 3. Fallback to a nice placeholder
+  return getBeautyPlaceholder();
+};
+
+  // Create a beauty-themed placeholder
+  const getBeautyPlaceholder = () => {
+    const beautyColors = [
+      { bg: 'FFB6C1', text: '💄' }, // Light Pink
+      { bg: 'E6E6FA', text: '🌸' }, // Lavender
+      { bg: 'FFE4E1', text: '💋' }, // Misty Rose
+      { bg: 'F0F8FF', text: '✨' }, // Alice Blue
+      { bg: 'FFF0F5', text: '🦋' }, // Lavender Blush
+      { bg: 'F5FFFA', text: '🌿' }, // Mint Cream
+    ];
+    
+    const colorSet = beautyColors[Math.floor(Math.random() * beautyColors.length)];
+    const text = product?.name?.substring(0, 2).toUpperCase() || 'BS'; // Beauty Store
+    
+    // Create SVG placeholder
+    return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'%3E%3Crect width='400' height='400' fill='%23${colorSet.bg}'/%3E%3Ctext x='50%25' y='45%25' dominant-baseline='middle' text-anchor='middle' font-family='Arial, sans-serif' font-size='72' fill='%23${getContrastColor(colorSet.bg)}'%3E${colorSet.text}%3C/text%3E%3Ctext x='50%25' y='60%25' dominant-baseline='middle' text-anchor='middle' font-family='Arial, sans-serif' font-size='24' fill='%23${getContrastColor(colorSet.bg)}'%3E${encodeURIComponent(text)}%3C/text%3E%3C/svg%3E`;
   };
 
+  // Helper to get contrasting text color
+  const getContrastColor = (hexcolor) => {
+    // If it's a 3-digit hex, expand it
+    if (hexcolor.length === 3) {
+      hexcolor = hexcolor.split('').map(c => c + c).join('');
+    }
+    
+    const r = parseInt(hexcolor.substr(0, 2), 16);
+    const g = parseInt(hexcolor.substr(2, 2), 16);
+    const b = parseInt(hexcolor.substr(4, 2), 16);
+    
+    // Calculate relative luminance
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    
+    // Return black for light backgrounds, white for dark
+    return luminance > 0.5 ? '000000' : 'ffffff';
+  };
+
+  // Calculate prices safely
   const price = product.discountPrice > 0 ? product.discountPrice : product.price;
   const originalPrice = product.discountPrice > 0 ? product.price : null;
   const discountPercentage = product.discountPrice > 0 
@@ -26,49 +143,69 @@ const ProductCard = ({ product }) => {
     : 0;
 
   return (
-    <Link to={`/product/${product._id}`}>
-      <div 
-        className="bg-white rounded-lg shadow hover:shadow-xl transition-all duration-300 overflow-hidden group animate-fade-in mobile-tap-target"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
-        {/* Product Image */}
-        <div className="relative overflow-hidden">
-          <img
-            src={product.images?.[0] || 'https://via.placeholder.com/300'}
-            alt={product.name}
-            className="w-full h-48 sm:h-56 object-cover group-hover:scale-110 transition-transform duration-500"
-            loading="lazy"
-          />
+    <div 
+      className="bg-white rounded-lg shadow hover:shadow-xl transition-all duration-300 overflow-hidden animate-fade-in"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <Link to={`/product/${product._id}`} className="block">
+        {/* Product Image Container */}
+        <div className="relative overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 h-48 sm:h-56">
+          {/* Loading skeleton */}
+          {!imageUrl && (
+            <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200"></div>
+          )}
+          
+          {/* Fallback icon if image fails */}
+          {imageError && (
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-100 animate-pulse">
+              <div className="text-center">
+                <FaImage className="text-gray-400 text-4xl mx-auto mb-2" />
+                <span className="text-xs text-gray-500">Loading Image...</span>
+              </div>
+            </div>
+          )}
+          
+          {/* Actual Image */}
+          {imageUrl && !imageError && (
+            <img
+              src={imageUrl}
+              alt={product.name || 'Product'}
+              className={`w-full h-full object-cover transition-transform duration-500 ${isHovered ? 'scale-110' : 'scale-100'}`}
+              loading="lazy"
+              onError={() => {
+                console.error('Failed to load image:', imageUrl);
+                setImageError(true);
+              }}
+              onLoad={() => {
+                setImageError(false);
+              }}
+            />
+          )}
           
           {/* Discount Badge */}
           {discountPercentage > 0 && (
-            <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded animate-scale-in">
+            <div className="absolute top-3 left-3 bg-gradient-to-r from-red-500 to-pink-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg animate-pulse">
+              <FaTag className="inline mr-1" />
               {discountPercentage}% OFF
             </div>
           )}
           
-          {/* Quick Add to Cart - Mobile */}
-          <div className="lg:hidden absolute bottom-2 right-2">
-            <button
-              onClick={handleAddToCart}
-              className="p-2 rounded-full bg-white text-gray-700 shadow-lg hover:bg-primary-500 hover:text-white transition-all duration-300 mobile-tap-target"
-              aria-label="Add to cart"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-            </button>
-          </div>
-
-          {/* Stock Status */}
-          <div className={`absolute bottom-0 left-0 right-0 p-2 text-xs font-medium text-center transition-all duration-300 ${
+          {/* New Product Badge */}
+          {product.isNew && (
+            <div className="absolute top-3 right-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg animate-bounce">
+              NEW
+            </div>
+          )}
+          
+          {/* Stock Status Overlay */}
+          <div className={`absolute bottom-0 left-0 right-0 p-2 text-xs font-medium text-center transition-all duration-300 transform ${
             product.stock > 10 
               ? 'bg-green-500/90 text-white' 
               : product.stock > 0 
                 ? 'bg-yellow-500/90 text-white' 
                 : 'bg-red-500/90 text-white'
-          } ${isHovered ? 'opacity-100' : 'opacity-0'}`}>
+          } ${isHovered ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`}>
             {product.stock > 10 
               ? 'In Stock' 
               : product.stock > 0 
@@ -76,62 +213,77 @@ const ProductCard = ({ product }) => {
                 : 'Out of Stock'}
           </div>
         </div>
+      </Link>
 
-        {/* Product Info */}
-        <div className="p-3 sm:p-4">
-          {/* Brand */}
-          <div className="text-xs text-gray-500 uppercase tracking-wider mb-1 truncate">
-            {product.brand}
-          </div>
-          
-          {/* Name */}
-          <h3 className="font-semibold text-gray-900 text-sm sm:text-base mb-1 line-clamp-2 h-10 group-hover:text-primary-600 transition-colors">
-            {product.name}
+      {/* Product Info */}
+      <div className="p-4">
+        {/* Brand */}
+        <div className="text-xs text-gray-500 uppercase tracking-wider mb-1 truncate">
+          {product.brand || 'Premium Brand'}
+        </div>
+        
+        {/* Name */}
+        <Link to={`/product/${product._id}`}>
+          <h3 className="font-semibold text-gray-900 text-sm sm:text-base mb-2 line-clamp-2 hover:text-primary-600 transition-colors">
+            {product.name || 'Product Name'}
           </h3>
-          
-          {/* Rating */}
-          <div className="flex items-center mb-2">
-            <div className="flex">
-              {[...Array(5)].map((_, i) => (
-                <svg
-                  key={i}
-                  className={`w-3 h-3 sm:w-4 sm:h-4 ${
-                    i < Math.floor(product.rating || 0)
-                      ? 'text-yellow-400 fill-yellow-400'
-                      : 'text-gray-300 fill-gray-300'
-                  }`}
-                  viewBox="0 0 20 20"
-                >
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                </svg>
-              ))}
-            </div>
-            <span className="ml-1 text-xs text-gray-600">
-              ({product.numReviews || 0})
-            </span>
+        </Link>
+        
+        {/* Rating */}
+        <div className="flex items-center mb-3">
+          <div className="flex">
+            {[...Array(5)].map((_, i) => (
+              <FaStar
+                key={i}
+                className={`text-xs sm:text-sm ${
+                  i < Math.floor(product.rating || 0)
+                    ? 'text-yellow-400 fill-yellow-400'
+                    : 'text-gray-300 fill-gray-300'
+                }`}
+              />
+            ))}
           </div>
-          
-          {/* Price */}
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-gray-900 text-base sm:text-lg">
-              Rs. {price?.toLocaleString() || '0'}
+          <span className="ml-2 text-xs text-gray-600">
+            ({product.numReviews || 0} reviews)
+          </span>
+        </div>
+        
+        {/* Price */}
+        <div className="flex items-center gap-2 mb-4">
+          <span className="font-bold text-gray-900 text-lg sm:text-xl">
+            Rs. {price?.toLocaleString() || '0'}
+          </span>
+          {originalPrice && (
+            <span className="text-sm text-gray-500 line-through">
+              Rs. {originalPrice.toLocaleString()}
             </span>
-            {originalPrice && (
-              <span className="text-xs sm:text-sm text-gray-500 line-through">
-                Rs. {originalPrice.toLocaleString()}
-              </span>
-            )}
-          </div>
-          
-          {/* Category */}
-          <div className="mt-2">
-            <span className="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded">
+          )}
+        </div>
+        
+        {/* Add to Cart Button */}
+        <button
+          onClick={handleAddToCart}
+          disabled={product.stock === 0}
+          className={`w-full py-3 px-4 rounded-lg font-medium text-sm transition-all duration-300 flex items-center justify-center gap-2 mobile-tap-target shadow-md hover:shadow-lg ${
+            product.stock === 0
+              ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+              : 'bg-gradient-to-r from-primary-500 to-primary-600 text-white hover:from-primary-600 hover:to-primary-700 active:scale-95'
+          }`}
+        >
+          <FaShoppingCart className={product.stock === 0 ? 'opacity-50' : 'animate-bounce'} />
+          <span>{product.stock === 0 ? 'Out of Stock' : 'Add to Cart'}</span>
+        </button>
+        
+        {/* Category */}
+        {product.category && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <span className="inline-block bg-gray-100 text-gray-600 text-xs px-3 py-1 rounded-full">
               {product.category}
             </span>
           </div>
-        </div>
+        )}
       </div>
-    </Link>
+    </div>
   );
 };
 
