@@ -86,7 +86,7 @@ const Footer = () => {
               <a href="#" className="text-gray-400 hover:text-white transition-colors p-2">
                 <FaYoutube size={20} />
               </a>
-              <a href="https://tiktok.com/@manibhai_00" className="text-gray-400 hover:text-white transition-colors p-2">
+              <a href="https://tiktok.com/@mani_gifts_store" className="text-gray-400 hover:text-white transition-colors p-2">
                 <SiTiktok size={20} />
               </a>
             </div>
@@ -151,7 +151,7 @@ const Footer = () => {
         <div className="border-t border-gray-800 mt-8 pt-6">
           <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
             <p className="text-gray-400 text-sm text-center md:text-left">
-              © {new Date().getFullYear()} Powered by HamzaXDevelopers. All rights reserved. (Contact: 03297474472)
+              © {new Date().getFullYear()} Powered by HamzaxDevelopers. All rights reserved. (Contact: 03297474472)
             </p>
             <div className="flex items-center flex-wrap justify-center gap-4">
               <div className="text-xs bg-gray-800 px-2 py-1 rounded">COD</div>

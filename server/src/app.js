@@ -35,7 +35,22 @@ const __dirname = path.dirname(__filename);
 connectDB();
 
 const app = express();
-
+app.use((req, res, next) => {
+  const host = req.get('host');
+  const protocol = req.protocol;
+  
+  // Redirect old Railway domain to new custom domain
+  if (host === 'ingenious-laughter-production.up.railway.app') {
+    return res.redirect(301, `https://www.mbeautybloom.shop${req.originalUrl}`);
+  }
+  
+  // Redirect non-www to www (optional but recommended)
+  if (host === 'mbeautybloom.shop') {
+    return res.redirect(301, `https://www.mbeautybloom.shop${req.originalUrl}`);
+  }
+  
+  next();
+});
 // Security middleware
 app.use(helmet({
   contentSecurityPolicy: false,
@@ -47,12 +62,13 @@ app.use(mongoSanitize());
 // Update the CORS configuration
 const allowedOrigins = process.env.NODE_ENV === 'production'
   ? [
+      'https://www.mbeautybloom.shop',
+      'https://mbeautybloom.shop',
       'https://ingenious-laughter-production.up.railway.app',
       'http://localhost:3000',
       'http://localhost:5173'
     ]
   : ['http://localhost:3000', 'http://localhost:5173'];
-
 console.log('🌐 Configuring CORS for origins:', allowedOrigins);
 
 app.use(cors({
