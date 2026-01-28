@@ -16,8 +16,9 @@ router.get('/', asyncHandler(async (req, res) => {
 // @desc    Create a category
 // @route   POST /api/categories
 // @access  Private/Admin
+// In categoryRoutes.js - Update the POST route
 router.post('/', protect, admin, asyncHandler(async (req, res) => {
-  const { name, description, image, parentCategory, order } = req.body;
+  const { name, description, image, parentCategory, order, isActive } = req.body;
   
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
   
@@ -26,8 +27,9 @@ router.post('/', protect, admin, asyncHandler(async (req, res) => {
     slug,
     description,
     image,
-    parentCategory,
+    parentCategory: parentCategory || null,
     order: order || 0,
+    isActive: isActive !== undefined ? isActive : true, // Add this line
   });
   
   const createdCategory = await category.save();

@@ -111,11 +111,11 @@ const Terms = () => {
                   <ul className="space-y-2 text-sm">
                     <li className="flex items-center">
                       <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-                      <span>Karachi: 1-3 business days</span>
+                      <span>Karachi: 3-5 business days</span>
                     </li>
                     <li className="flex items-center">
                       <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
-                      <span>Lahore/Islamabad: 3-5 business days</span>
+                      <span>Lahore/Islamabad: 1-3 business days</span>
                     </li>
                     <li className="flex items-center">
                       <div className="w-2 h-2 bg-yellow-500 rounded-full mr-2"></div>
@@ -136,15 +136,15 @@ const Terms = () => {
                     </li>
                     <li className="flex justify-between">
                       <span>Orders below Rs. 2,000</span>
-                      <span className="font-semibold">Rs. 200</span>
+                      <span className="font-semibold">Rs. 250</span>
                     </li>
                     <li className="flex justify-between">
                       <span>Express Shipping</span>
                       <span className="font-semibold">Rs. 500</span>
                     </li>
                     <li className="flex justify-between">
-                      <span>Same-day Delivery (Karachi)</span>
-                      <span className="font-semibold">Rs. 300</span>
+                      <span>Same-day Delivery </span>
+                      <span className="font-semibold">Rs. 350</span>
                     </li>
                   </ul>
                 </div>
@@ -261,19 +261,19 @@ const Terms = () => {
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <p className="font-semibold">Email:</p>
-                    <p className="text-gray-600">legal@cosmeticsstore.com</p>
+                    <p className="text-gray-600">hamzaxdevelopers1223@gmail.com</p>
                   </div>
                   <div>
                     <p className="font-semibold">Phone:</p>
-                    <p className="text-gray-600">+92 300 1234567</p>
+                    <p className="text-gray-600">+92 321 4203402</p>
                   </div>
                   <div>
                     <p className="font-semibold">Address:</p>
-                    <p className="text-gray-600">DHA Phase 5, Karachi, Pakistan</p>
+                    <p className="text-gray-600">Urdu Bazaar Near Goga Fabrics Kasur, Pakistan</p>
                   </div>
                   <div>
                     <p className="font-semibold">Business Hours:</p>
-                    <p className="text-gray-600">9:00 AM - 6:00 PM (PST)</p>
+                    <p className="text-gray-600">11:00 AM - 10:00 PM (PST)</p>
                   </div>
                 </div>
               </div>

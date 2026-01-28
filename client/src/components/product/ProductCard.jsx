@@ -38,66 +38,68 @@ const ProductCard = ({ product }) => {
       icon: '🛒'
     });
   };
-// ProductCard.jsx - Update the constructImageUrl function
 
-const constructImageUrl = () => {
-  console.log('Product image data:', {
-    images: product.images,
-    image: product.image,
-    public_id: product.images?.[0]?.public_id
-  });
+  // ProductCard.jsx - Updated for Cloudinary
+  const constructImageUrl = () => {
+    console.log('Product image data:', {
+      images: product.images,
+      image: product.image,
+      public_id: product.images?.[0]?.public_id
+    });
 
-  // 1. Try UploadCare public_id first from images array
-  if (product.images && product.images.length > 0) {
-    const firstImage = product.images[0];
-    
-    // If it has public_id (UploadCare format)
-    if (firstImage.public_id) {
-      // Remove any leading slash if exists
-      const publicId = firstImage.public_id.startsWith('/') 
-        ? firstImage.public_id.substring(1) 
-        : firstImage.public_id;
+    // 1. Try Cloudinary URL from images array first
+    if (product.images && product.images.length > 0) {
+      const firstImage = product.images[0];
       
-      // Construct UploadCare URL with your specific dimensions
-      const uploadCareUrl = `https://s2vbpeuic7.ucarecd.net/${publicId}/-/preview/872x1000/`;
-      console.log('Generated UploadCare URL:', uploadCareUrl);
-      return uploadCareUrl;
-    }
-    
-    // If images[0] is directly a string URL (alternative format)
-    if (typeof firstImage === 'string') {
-      return firstImage;
-    }
-    
-    // If images[0] is an object with url property
-    if (firstImage.url) {
-      // Check if it's already a full URL or needs transformation
-      if (firstImage.url.includes('ucarecdn.com')) {
-        // Convert ucarecdn.com URL to your custom domain
-        const publicId = firstImage.url.replace('https://ucarecdn.com/', '').replace('/', '');
-        return `https://s2vbpeuic7.ucarecd.net/${publicId}/-/preview/872x1000/`;
+      // If it's already a full Cloudinary URL
+      if (firstImage.url && firstImage.url.includes('cloudinary.com')) {
+        console.log('Using Cloudinary URL:', firstImage.url);
+        return firstImage.url;
       }
-      return firstImage.url;
+      
+      // If it's an object with url property (any URL)
+      if (firstImage.url) {
+        return firstImage.url;
+      }
+      
+      // If images[0] is directly a string URL
+      if (typeof firstImage === 'string') {
+        return firstImage;
+      }
+      
+      // If we have a public_id but no URL, construct Cloudinary URL
+      if (firstImage.public_id) {
+        const cloudName = 'dr1rajqzy'; // Your Cloudinary cloud name
+        // Remove any leading slash if exists
+        const publicId = firstImage.public_id.startsWith('/') 
+          ? firstImage.public_id.substring(1) 
+          : firstImage.public_id;
+        
+        // Construct Cloudinary URL with your specific dimensions
+        const cloudinaryUrl = `https://res.cloudinary.com/${cloudName}/image/upload/w_872,h_1000,c_fill,q_auto,f_auto/${publicId}`;
+        console.log('Generated Cloudinary URL:', cloudinaryUrl);
+        return cloudinaryUrl;
+      }
     }
-  }
 
-  // 2. Try direct image property (backward compatibility)
-  if (product.image) {
-    // Check if it's already a full URL
-    if (product.image.includes('http')) {
-      return product.image;
+    // 2. Try direct image property (backward compatibility)
+    if (product.image) {
+      // Check if it's already a full URL
+      if (product.image.includes('http')) {
+        return product.image;
+      }
+      
+      // If it looks like a public_id (not a full URL)
+      const cloudName = 'dr1rajqzy';
+      const publicId = product.image.startsWith('/') 
+        ? product.image.substring(1) 
+        : product.image;
+      return `https://res.cloudinary.com/${cloudName}/image/upload/w_872,h_1000,c_fill,q_auto,f_auto/${publicId}`;
     }
-    
-    // If it looks like a public_id (not a full URL)
-    const publicId = product.image.startsWith('/') 
-      ? product.image.substring(1) 
-      : product.image;
-    return `https://s2vbpeuic7.ucarecd.net/${publicId}/-/preview/872x1000/`;
-  }
 
-  // 3. Fallback to a nice placeholder
-  return getBeautyPlaceholder();
-};
+    // 3. Fallback to a nice placeholder
+    return getBeautyPlaceholder();
+  };
 
   // Create a beauty-themed placeholder
   const getBeautyPlaceholder = () => {

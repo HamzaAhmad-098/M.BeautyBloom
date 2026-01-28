@@ -17,7 +17,13 @@ const api = axios.create({
   withCredentials: true,
 });
 
-// Request interceptor
+// Create a separate instance for file uploads with multipart/form-data
+const uploadApi = axios.create({
+  baseURL: API_URL,
+  withCredentials: true,
+});
+
+// Request interceptor for regular API calls
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -33,6 +39,23 @@ api.interceptors.request.use(
   }
 );
 
+// Request interceptor for upload API
+uploadApi.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    // Don't set Content-Type for FormData - let browser set it with boundary
+    console.log(`📤 UPLOAD ${config.method?.toUpperCase()} ${config.url}`);
+    return config;
+  },
+  (error) => {
+    console.error('❌ Upload request error:', error);
+    return Promise.reject(error);
+  }
+);
+
 // Response interceptor
 api.interceptors.response.use(
   (response) => {
@@ -43,7 +66,8 @@ api.interceptors.response.use(
     console.error('❌ Response error:', {
       url: error.config?.url,
       status: error.response?.status,
-      message: error.message
+      message: error.message,
+      data: error.response?.data
     });
     
     if (error.response?.status === 401) {
@@ -55,6 +79,31 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// Response interceptor for upload API
+uploadApi.interceptors.response.use(
+  (response) => {
+    console.log(`✅ UPLOAD ${response.status} ${response.config.url}`);
+    return response;
+  },
+  (error) => {
+    console.error('❌ Upload response error:', {
+      url: error.config?.url,
+      status: error.response?.status,
+      message: error.message,
+      data: error.response?.data
+    });
+    
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    }
+    
+    return Promise.reject(error);
+  }
+);
+
 // ============ PRODUCT MANAGEMENT ============
 export const adminProductApi = {
   // Get all products with filters
@@ -70,28 +119,56 @@ export const adminProductApi = {
   },
 
   // Create product
-// Create product
-// Create product
-createProduct: async (productData) => {
-  console.log('🌐 API Call: Creating product');
-  console.log('📦 Product data being sent:', JSON.stringify(productData, null, 2));
-  console.log('🖼️ Images in request:', productData.images);
-  
-  try {
-    const response = await api.post('/products', productData);
-    console.log('✅ API Response:', response.data);
-    return response.data;
-  } catch (error) {
-    console.error('❌ API Error:', error.response?.data || error.message);
-    throw error;
-  }
-},
+  createProduct: async (productData) => {
+    console.log('🌐 API Call: Creating product');
+    console.log('📦 Product data being sent:', JSON.stringify(productData, null, 2));
+    console.log('🖼️ Images in request:', productData.images);
+    
+    // Ensure images are in the correct format for Cloudinary
+    const formattedData = {
+      ...productData,
+      images: Array.isArray(productData.images) ? productData.images.map(img => {
+        // If image is a string URL, convert to object format
+        if (typeof img === 'string') {
+          return {
+            url: img,
+            public_id: img.split('/').pop().split('.')[0], // Extract filename without extension
+            alt: productData.name || 'Product image'
+          };
+        }
+        // If it's already an object with Cloudinary fields
+        if (img.url && img.public_id) {
+          return img;
+        }
+        // If it's an object with only url
+        if (img.url) {
+          return {
+            url: img.url,
+            public_id: img.url.split('/').pop().split('.')[0],
+            alt: img.alt || productData.name || 'Product image'
+          };
+        }
+        return img;
+      }) : []
+    };
+    
+    console.log('🔄 Formatted product data:', formattedData);
+    
+    try {
+      const response = await api.post('/products', formattedData);
+      console.log('✅ API Response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ API Error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
 
   // Update product
-  updateProduct: async (productId, productData) => {
-    const response = await api.put(`/products/${productId}`, productData);
-    return response.data;
-  },
+updateProduct: async (productId, productData) => {
+  const response = await api.put(`/products/${productId}`, productData);
+  return response.data;
+},
 
   // Delete product
   deleteProduct: async (productId) => {
@@ -99,27 +176,33 @@ createProduct: async (productData) => {
     return response.data;
   },
 
-  // Upload product images to Cloudinary
-// Upload product images to Cloudinary
-uploadImages: async (formData) => {
-  const token = localStorage.getItem('token');
-  // Use /admin/upload/images (not /admin/admin/upload/images)
-  const response = await axios.post(`${API_URL}/admin/upload/images`, formData, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'multipart/form-data',
-    },
-  });
-  return response.data;
-},
+  // Upload product images to Cloudinary - CORRECTED ENDPOINT
+  uploadImages: async (formData) => {
+    console.log('📤 Uploading images to Cloudinary...');
+    console.log('📁 FormData entries:', formData.getAll('images'));
+    
+    try {
+      // Use the upload API instance with proper FormData handling
+      const response = await uploadApi.post('/upload/cloudinary', formData);
+      console.log('✅ Cloudinary upload response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Cloudinary upload error:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
+      throw error;
+    }
+  },
 
   // Get brands
   getBrands: async () => {
-    const response = await api.get('/admin/brands');
+    const response = await api.get('/products/brands');
     return response.data;
   },
 
-  // Get categories
+  // Get categories from products aggregation
   getCategories: async () => {
     const response = await api.get('/products/categories');
     return response.data;
@@ -127,43 +210,94 @@ uploadImages: async (formData) => {
 };
 
 // ============ CATEGORY MANAGEMENT ============
+// In adminApi.js - Update the category management section
 export const adminCategoryApi = {
   // Get all categories
   getAllCategories: async () => {
-    const response = await api.get('/products/categories');
-    return response.data;
+    try {
+      const response = await api.get('/categories');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      throw error;
+    }
   },
 
   // Get category by ID
   getCategoryById: async (categoryId) => {
-    const response = await api.get(`/categories/${categoryId}`);
-    return response.data;
+    try {
+      const response = await api.get(`/categories/${categoryId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching category:', error);
+      throw error;
+    }
   },
 
   // Create category
   createCategory: async (categoryData) => {
-    const response = await api.post('/categories', categoryData);
-    return response.data;
+    try {
+      console.log('📤 Creating category with data:', categoryData);
+      
+      // Prepare category data with required fields
+      const dataToSend = {
+        name: categoryData.name,
+        description: categoryData.description || '',
+        image: categoryData.image || '',
+        parentCategory: categoryData.parentCategory || null,
+        order: categoryData.order || 0,
+        isActive: categoryData.isActive !== undefined ? categoryData.isActive : true
+      };
+      
+      console.log('📤 Sending category data:', dataToSend);
+      
+      const response = await api.post('/categories', dataToSend);
+      console.log('✅ Category created:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error creating category:', error.response?.data || error.message);
+      throw error;
+    }
   },
 
   // Update category
   updateCategory: async (categoryId, categoryData) => {
-    const response = await api.put(`/categories/${categoryId}`, categoryData);
-    return response.data;
+    try {
+      console.log('📝 Updating category:', categoryId, categoryData);
+      const response = await api.put(`/categories/${categoryId}`, categoryData);
+      console.log('✅ Category updated:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating category:', error);
+      throw error;
+    }
   },
 
   // Delete category
   deleteCategory: async (categoryId) => {
-    const response = await api.delete(`/categories/${categoryId}`);
-    return response.data;
+    try {
+      console.log('🗑️ Deleting category:', categoryId);
+      const response = await api.delete(`/categories/${categoryId}`);
+      console.log('✅ Category deleted:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      throw error;
+    }
   },
 
   // Get category tree
   getCategoryTree: async () => {
-    const response = await api.get('/categories/tree');
-    return response.data;
+    try {
+      const response = await api.get('/categories/tree');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching category tree:', error);
+      throw error;
+    }
   },
 };
+
 // ============ USER MANAGEMENT ============
 export const adminUserApi = {
   // Get all users with pagination
@@ -203,8 +337,6 @@ export const adminUserApi = {
   },
 };
 
-
-
 // ============ ORDER MANAGEMENT ============
 export const adminOrderApi = {
   // Get all orders with filters
@@ -239,20 +371,80 @@ export const adminOrderApi = {
   },
 };
 
-
 // ============ DASHBOARD STATS ============
 export const adminDashboardApi = {
   // Get dashboard stats
   getDashboardStats: async () => {
-    const [userStats, orderStats] = await Promise.all([
-      api.get('/auth/admin/stats'),
-      api.get('/orders/stats'),
-    ]);
+    try {
+      const [userStats, orderStats] = await Promise.all([
+        api.get('/auth/admin/stats'),
+        api.get('/orders/stats'),
+      ]);
+      
+      return {
+        users: userStats.data,
+        orders: orderStats.data,
+      };
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+      throw error;
+    }
+  },
+};
+
+// ============ CLOUDINARY HELPER FUNCTIONS ============
+export const cloudinaryHelpers = {
+  // Get Cloudinary image URL with transformations
+  getImageUrl: (imageObj, width = 800, height = 600) => {
+    if (!imageObj) {
+      return 'https://via.placeholder.com/300x300?text=No+Image';
+    }
     
-    return {
-      users: userStats.data.data,
-      orders: orderStats.data,
-    };
+    // If imageObj is a string, return it directly
+    if (typeof imageObj === 'string') {
+      return imageObj;
+    }
+    
+    // If imageObj has a URL, return it
+    if (imageObj.url) {
+      return imageObj.url;
+    }
+    
+    // If imageObj has a public_id, construct Cloudinary URL
+    if (imageObj.public_id) {
+      const cloudName = process.env.CLOUDINARY_CLOUD_NAME || 'dr1rajqzy';
+      const transformations = `c_fill,w_${width},h_${height},q_auto,f_auto`;
+      return `https://res.cloudinary.com/${cloudName}/image/upload/${transformations}/${imageObj.public_id}`;
+    }
+    
+    return 'https://via.placeholder.com/300x300?text=No+Image';
+  },
+
+  // Get thumbnail URL
+  getThumbnailUrl: (imageObj, width = 300, height = 300) => {
+    return cloudinaryHelpers.getImageUrl(imageObj, width, height);
+  },
+
+  // Extract public_id from Cloudinary URL
+  extractPublicId: (cloudinaryUrl) => {
+    if (!cloudinaryUrl) return null;
+    
+    try {
+      const url = new URL(cloudinaryUrl);
+      const pathParts = url.pathname.split('/');
+      
+      // Find the upload folder and get everything after it
+      const uploadIndex = pathParts.indexOf('upload');
+      if (uploadIndex !== -1) {
+        // Join all parts after 'upload' and remove file extension
+        const publicIdWithExt = pathParts.slice(uploadIndex + 2).join('/');
+        return publicIdWithExt.replace(/\.[^/.]+$/, ''); // Remove file extension
+      }
+    } catch (error) {
+      console.warn('Error extracting public_id from URL:', cloudinaryUrl);
+    }
+    
+    return null;
   },
 };
 

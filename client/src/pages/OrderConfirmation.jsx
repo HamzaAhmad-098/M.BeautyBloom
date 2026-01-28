@@ -11,9 +11,11 @@ import {
   FaPhone,
   FaMapMarkerAlt,
   FaTruck,
-  FaWhatsapp
+  FaWhatsapp,
+  FaCopy
 } from 'react-icons/fa';
 import { checkoutApi } from '@/services/checkoutApi.js';
+import { toast } from 'react-hot-toast';
 
 const OrderConfirmation = () => {
   const { orderId } = useParams();
@@ -23,6 +25,53 @@ const OrderConfirmation = () => {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  // Helper function to get image URL (same logic as Products.jsx)
+  const getImageUrl = (imageData) => {
+    if (!imageData) {
+      return 'https://via.placeholder.com/100';
+    }
+
+    // If imageData is a string
+    if (typeof imageData === 'string') {
+      // If it's already a URL
+      if (imageData.includes('http')) {
+        return imageData;
+      }
+      // If it's a public_id, construct Cloudinary URL
+      const cloudName = 'dr1rajqzy';
+      return `https://res.cloudinary.com/${cloudName}/image/upload/w_200,h_200,c_fill,q_auto,f_auto/${imageData}`;
+    }
+
+    // If imageData is an object with url property
+    if (imageData.url) {
+      // Return the Cloudinary URL directly
+      return imageData.url;
+    }
+
+    // If we have a public_id but no URL, construct Cloudinary URL
+    if (imageData.public_id) {
+      // Construct Cloudinary URL from public_id
+      const cloudName = process.env.CLOUDINARY_CLOUD_NAME || 'dr1rajqzy';
+      return `https://res.cloudinary.com/${cloudName}/image/upload/${imageData.public_id}`;
+    }
+
+    // Fallback
+    return 'https://via.placeholder.com/100';
+  };
+
+  // Get image URL for order item
+  const getItemImageUrl = (item) => {
+    // Try different possible image locations
+    if (item.image) {
+      return getImageUrl(item.image);
+    }
+    if (item.images && item.images.length > 0) {
+      return getImageUrl(item.images[0]);
+    }
+    return 'https://via.placeholder.com/100';
+  };
   
   useEffect(() => {
     fetchOrderDetails();
@@ -59,6 +108,20 @@ const OrderConfirmation = () => {
     const message = `Hello, I need support for my order #${orderId}`;
     const url = `https://wa.me/923001234567?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
+  };
+
+  const handleCopyOrderId = () => {
+    navigator.clipboard.writeText(orderId);
+    setCopied(true);
+    toast.success('Order ID copied to clipboard');
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Function to format order ID for display (shows first 8 and last 8 characters)
+  const formatOrderId = (id) => {
+    if (!id) return '';
+    if (id.length <= 16) return id;
+    return `${id.substring(0, 8)}...${id.substring(id.length - 8)}`;
   };
   
   if (loading) {
@@ -115,12 +178,28 @@ const OrderConfirmation = () => {
           </div>
         </div>
         
-        {/* Order Summary Card */}
+        {/* Order Summary Card - FIXED ORDER ID DISPLAY */}
         <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200 mb-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="text-center p-4 border-r border-gray-200">
-              <div className="text-3xl font-bold text-primary-600">#{order._id}</div>
-              <div className="text-sm text-gray-500 mt-1">Order Number</div>
+              <div className="flex flex-col items-center">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="text-2xl md:text-3xl font-bold text-primary-600 truncate max-w-full" title={order._id}>
+                    #{formatOrderId(order._id)}
+                  </div>
+                  <button
+                    onClick={handleCopyOrderId}
+                    className="text-gray-400 hover:text-primary-500 transition-colors"
+                    title="Copy Order ID"
+                  >
+                    <FaCopy className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="text-sm text-gray-500">Order Number</div>
+                {copied && (
+                  <div className="text-xs text-green-600 mt-1">Copied!</div>
+                )}
+              </div>
             </div>
             
             <div className="text-center p-4 border-r border-gray-200">
@@ -190,17 +269,17 @@ const OrderConfirmation = () => {
                   <p className="font-semibold capitalize">
                     {order.paymentMethod?.replace(/([A-Z])/g, ' $1')}
                   </p>
-                  <p className="text-gray-600">
-                    {order.isPaid ? 'Payment Completed' : 'Payment Pending'}
+                  <p className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium mt-2 ${
+                    order.isPaid ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {order.isPaid ? 'Paid' : 'Payment Pending'}
                   </p>
+                  {order.isPaid && order.paidAt && (
+                    <p className="text-sm text-gray-600 mt-2">
+                      Paid on {new Date(order.paidAt).toLocaleString()}
+                    </p>
+                  )}
                 </div>
-                
-                {order.paymentResult?.id && (
-                  <div className="text-sm">
-                    <span className="text-gray-500">Transaction ID: </span>
-                    <span className="font-mono">{order.paymentResult.id}</span>
-                  </div>
-                )}
               </div>
             </div>
             
@@ -213,36 +292,50 @@ const OrderConfirmation = () => {
               
               <div className="space-y-4">
                 {order.orderItems?.map((item, index) => (
-                  <div key={index} className="flex items-center py-3 border-b border-gray-100 last:border-0">
-                    <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100">
-                      <img
-                        src={item.image || '/placeholder-product.jpg'}
-                        alt={item.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="ml-4 flex-1">
-                      <h4 className="font-medium text-gray-900">{item.name}</h4>
-                      <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
+                  <div key={index} className="flex items-center space-x-4 pb-4 border-b last:border-b-0">
+                    <img
+                      src={getItemImageUrl(item)}
+                      alt={item.name}
+                      className="w-20 h-20 object-cover rounded-lg"
+                      onError={(e) => {
+                        e.target.src = 'https://via.placeholder.com/100?text=No+Image';
+                        e.target.onerror = null;
+                      }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900 truncate">{item.name}</h3>
+                      <p className="text-sm text-gray-600">Quantity: {item.quantity}</p>
+                      {item.variant && (
+                        <p className="text-sm text-gray-600">Variant: {item.variant}</p>
+                      )}
                     </div>
                     <div className="text-right">
-                      <div className="font-semibold text-gray-900">
+                      <p className="font-bold text-gray-900">
                         Rs. {(item.price * item.quantity).toLocaleString()}
-                      </div>
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        Rs. {item.price.toLocaleString()} each
+                      </p>
                     </div>
                   </div>
                 ))}
               </div>
-              
-              {/* Price Breakdown */}
-              <div className="mt-6 pt-6 border-t border-gray-200 space-y-2">
+            </div>
+          </div>
+          
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Order Summary */}
+            <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Order Summary</h3>
+              <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Subtotal</span>
                   <span>Rs. {order.itemsPrice?.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Shipping</span>
-                  <span>Rs. {order.shippingPrice?.toLocaleString()}</span>
+                  <span>{order.shippingPrice === 0 ? 'FREE' : `Rs. ${order.shippingPrice?.toLocaleString()}`}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Tax</span>
@@ -258,10 +351,7 @@ const OrderConfirmation = () => {
                 </div>
               </div>
             </div>
-          </div>
-          
-          {/* Next Steps Sidebar */}
-          <div className="space-y-6">
+            
             {/* What's Next */}
             <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
               <h3 className="text-lg font-bold text-gray-900 mb-4">What's Next?</h3>
@@ -339,8 +429,8 @@ const OrderConfirmation = () => {
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <h4 className="font-semibold text-blue-800 mb-2">Need Help?</h4>
               <ul className="text-sm text-blue-700 space-y-1">
-                <li>• Call us: 0300-1234567</li>
-                <li>• Email: support@cosmetics.com</li>
+                <li>• Call us: 0321-4203402</li>
+                <li>• Email: hamzaxdevelopers1223@gmail.com</li>
                 <li>• Live chat available 24/7</li>
               </ul>
             </div>

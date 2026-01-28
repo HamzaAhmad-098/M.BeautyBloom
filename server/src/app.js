@@ -66,9 +66,10 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
       'https://mbeautybloom.shop',
       'https://ingenious-laughter-production.up.railway.app',
       'http://localhost:3000',
-      'http://localhost:5173'
+      'http://localhost:5173',
+      'https://res.cloudinary.com'
     ]
-  : ['http://localhost:3000', 'http://localhost:5173'];
+  : ['http://localhost:3000', 'http://localhost:5173','https://res.cloudinary.com'];
 console.log('🌐 Configuring CORS for origins:', allowedOrigins);
 
 app.use(cors({
@@ -166,7 +167,7 @@ app.use((req, res, next) => {
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/cart', cartRoutes);
-app.use('/api/users', userRoutes);
+// app.use('/api/users', userRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/payment', paymentRoutes);

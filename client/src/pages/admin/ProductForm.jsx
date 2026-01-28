@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { FaArrowLeft, FaSave, FaUpload, FaTimes, FaSpinner } from 'react-icons/fa';
-import { adminProductApi } from '@/services/adminApi.js';
+import { adminProductApi, adminCategoryApi } from '@/services/adminApi.js';
 import { toast } from 'react-toastify';
 
 const ProductForm = ({ mode = 'create' }) => {
@@ -10,14 +10,8 @@ const ProductForm = ({ mode = 'create' }) => {
   const [loading, setLoading] = useState(mode === 'edit');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [categories] = useState([
-    'Skincare',
-    'Makeup',
-    'Haircare',
-    'Fragrance',
-    'Bath & Body',
-    'Tools & Brushes'
-  ]);
+  const [loadingCategories, setLoadingCategories] = useState(true);
+  const [categories, setCategories] = useState([]); // Now will be fetched from DB
   const [brands, setBrands] = useState([]);
   const [images, setImages] = useState([]);
   
@@ -33,35 +27,71 @@ const ProductForm = ({ mode = 'create' }) => {
   });
 
   useEffect(() => {
+    fetchCategories();
     fetchBrands();
     if (mode === 'edit' && id) {
       fetchProduct();
     }
   }, [mode, id]);
 
-  const fetchProduct = async () => {
+  const fetchCategories = async () => {
     try {
-      setLoading(true);
-      const data = await adminProductApi.getProductById(id);
-      setFormData({
-        name: data.name || '',
-        description: data.description || '',
-        price: data.price || '',
-        discountPrice: data.discountPrice || '',
-        category: data.category || '',
-        brand: data.brand || '',
-        stock: data.countInStock || data.stock || '',
-        isFeatured: data.isFeatured || false,
-      });
-      setImages(data.images || []);
+      setLoadingCategories(true);
+      const data = await adminCategoryApi.getAllCategories();
+      
+      // Filter active categories only for product creation/editing
+      const activeCategories = data
+        .filter(cat => cat.isActive)
+        .map(cat => ({
+          _id: cat._id,
+          name: cat.name,
+          slug: cat.slug,
+          description: cat.description,
+          isActive: cat.isActive
+        }));
+      
+      setCategories(activeCategories);
     } catch (error) {
-      console.error('Error fetching product:', error);
-      toast.error('Failed to fetch product');
-      navigate('/admin/products');
+      console.error('Error fetching categories:', error);
+      toast.error('Failed to fetch categories');
+      // Fallback to some default categories if fetch fails
+      setCategories([
+        'Skincare',
+        'Makeup',
+        'Haircare',
+        'Fragrance',
+        'Bath & Body',
+        'Tools & Brushes'
+      ]);
     } finally {
-      setLoading(false);
+      setLoadingCategories(false);
     }
   };
+
+  const fetchProduct = async () => {
+  try {
+    setLoading(true);
+    const data = await adminProductApi.getProductById(id);
+    setFormData({
+      name: data.name || '',
+      description: data.description || '',
+      price: data.price ? String(data.price) : '', // Convert to string
+      discountPrice: data.discountPrice ? String(data.discountPrice) : '', // Convert to string
+      category: data.category?._id || data.category || '',
+      brand: data.brand || '',
+      stock: data.countInStock ? String(data.countInStock) : 
+             data.stock ? String(data.stock) : '',
+      isFeatured: data.isFeatured || false,
+    });
+    setImages(data.images || []);
+  } catch (error) {
+    console.error('Error fetching product:', error);
+    toast.error('Failed to fetch product');
+    navigate('/admin/products');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const fetchBrands = async () => {
     try {
@@ -80,33 +110,48 @@ const ProductForm = ({ mode = 'create' }) => {
     });
   };
 
-  const handleImageUpload = async (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length === 0) return;
+const handleImageUpload = async (e) => {
+  const files = Array.from(e.target.files);
+  if (files.length === 0) return;
 
-    setUploading(true);
-    try {
-      const formDataObj = new FormData();
-      files.forEach(file => {
-        formDataObj.append('images', file);
-      });
+  setUploading(true);
+  try {
+    const formDataObj = new FormData();
+    files.forEach(file => {
+      formDataObj.append('images', file);
+    });
 
-      console.log('📤 Uploading', files.length, 'image(s)...');
-      const response = await adminProductApi.uploadImages(formDataObj);
-      console.log('✅ Upload response:', response);
-      
-      const newImages = response.images || [];
-      
-      setImages(prev => [...prev, ...newImages]);
-      
-      toast.success(`${newImages.length} image(s) uploaded successfully`);
-    } catch (error) {
-      console.error('❌ Error uploading images:', error);
-      toast.error(error.response?.data?.message || 'Failed to upload images');
-    } finally {
-      setUploading(false);
-    }
-  };
+    console.log('📤 Uploading', files.length, 'image(s) to Cloudinary...');
+    
+    // Upload to Cloudinary via backend
+    const response = await adminProductApi.uploadImages(formDataObj);
+    console.log('✅ Cloudinary upload response:', response);
+    
+    // Handle the response format - assuming response.images contains Cloudinary image objects
+    const newImages = response.images || response.data?.images || response;
+    
+    console.log('📸 New images received:', newImages);
+    
+    // Format images for product data
+    const formattedImages = newImages.map(img => ({
+      url: img.secure_url || img.url,
+      public_id: img.public_id,
+      alt: img.alt || formData.name || 'Product image'
+    }));
+    
+    setImages(prev => [...prev, ...formattedImages]);
+    
+    toast.success(`${formattedImages.length} image(s) uploaded successfully`);
+  } catch (error) {
+    console.error('❌ Error uploading images:', error);
+    const errorMsg = error.response?.data?.message || 
+                    error.message || 
+                    'Failed to upload images';
+    toast.error(errorMsg);
+  } finally {
+    setUploading(false);
+  }
+};
 
   const removeImage = (index) => {
     const newImages = images.filter((_, i) => i !== index);
@@ -168,7 +213,7 @@ const ProductForm = ({ mode = 'create' }) => {
           ? Number(formData.discountPrice) 
           : 0, // Send 0 if empty
         isFeatured: formData.isFeatured || false,
-        isNew: true,
+        isNew: mode === 'create',
         images: images,
       };
 
@@ -283,20 +328,47 @@ const ProductForm = ({ mode = 'create' }) => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Category <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    name="category"
-                    value={formData.category}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    required
-                  >
-                    <option value="">Select a category</option>
-                    {categories.map(cat => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
+                  {loadingCategories ? (
+                    <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">
+                      <div className="flex items-center">
+                        <FaSpinner className="animate-spin text-primary-500 mr-2" />
+                        <span className="text-gray-500">Loading categories...</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <select
+                      name="category"
+                      value={formData.category}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      required
+                    >
+                      <option value="">Select a category</option>
+                      {categories.length > 0 ? (
+                        categories.map(cat => (
+                          <option 
+                            key={cat._id || cat.name} 
+                            value={typeof cat === 'string' ? cat : cat.name}
+                          >
+                            {typeof cat === 'string' ? cat : cat.name}
+                          </option>
+                        ))
+                      ) : (
+                        // Fallback if no categories loaded
+                        <>
+                          <option value="Skincare">Skincare</option>
+                          <option value="Makeup">Makeup</option>
+                          <option value="Haircare">Haircare</option>
+                          <option value="Fragrance">Fragrance</option>
+                          <option value="Bath & Body">Bath & Body</option>
+                          <option value="Tools & Brushes">Tools & Brushes</option>
+                        </>
+                      )}
+                    </select>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">
+                    Manage categories in the Categories section
+                  </p>
                 </div>
               </div>
               
@@ -466,34 +538,27 @@ const ProductForm = ({ mode = 'create' }) => {
                 </div>
 
                 {/* Image Preview */}
-                {images.length > 0 && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Uploaded Images ({images.length})
-                    </label>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {images.map((image, index) => (
-                        <div key={index} className="relative group">
-                          <img
-                            src={image.url || image}
-                            alt={`Product ${index + 1}`}
-                            className="w-full h-24 object-cover rounded-lg border border-gray-200"
-                            onError={(e) => {
-                              e.target.src = 'https://via.placeholder.com/150?text=Image';
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => removeImage(index)}
-                            className="absolute -top-2 -right-2 bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:bg-red-600"
-                          >
-                            <FaTimes className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                {images.map((image, index) => (
+                  <div key={index} className="relative group">
+                    <img
+                      src={typeof image === 'string' ? image : (image.url || image.secure_url || image)}
+                      alt={`Product ${index + 1}`}
+                      className="w-full h-24 object-cover rounded-lg border border-gray-200"
+                      onError={(e) => {
+                        e.target.src = 'https://via.placeholder.com/150?text=Image';
+                        e.target.onerror = null; // Prevent infinite loop
+                      }}
+                      loading="lazy"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(index)}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:bg-red-600"
+                    >
+                      <FaTimes className="w-3 h-3" />
+                    </button>
                   </div>
-                )}
+                ))}
               </div>
             </div>
 
@@ -510,7 +575,7 @@ const ProductForm = ({ mode = 'create' }) => {
               <button
                 type="submit"
                 className="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 flex items-center disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-                disabled={saving || uploading}
+                disabled={saving || uploading || loadingCategories}
               >
                 {saving ? (
                   <>

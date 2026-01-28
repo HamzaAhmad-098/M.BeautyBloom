@@ -146,12 +146,7 @@ function App() {
           <Route path="verify-email/:token" element={<VerifyEmail />} />
           
           {/* Protected Routes (Requires authentication) */}
-          <Route path="checkout" element={
-            <ProtectedRoute>
-              <Checkout />
-            </ProtectedRoute>
-          } />
-          
+          <Route path="checkout" element={<Checkout />} />
           {/* User Routes (Regular users only) */}
           <Route path="profile" element={
             <ProtectedRoute>

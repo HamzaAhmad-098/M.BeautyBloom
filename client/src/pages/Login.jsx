@@ -3,7 +3,6 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { login } from '../store/slices/authSlice.js';
 import { FaEnvelope, FaLock, FaEye, FaEyeSlash, FaSpinner } from 'react-icons/fa';
-
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -290,17 +289,26 @@ const handleSubmit = async (e) => {
           </div>
 
           {/* Guest Checkout */}
-          <div className="text-center">
-            <p className="text-gray-600 mb-4">
-              Want to checkout without an account?
-            </p>
-            <Link
-              to="/checkout"
-              className="inline-block w-full border-2 border-primary-500 text-primary-500 hover:bg-primary-50 py-3 px-4 rounded-lg font-semibold transition-colors"
-            >
-              Continue as Guest
-            </Link>
-          </div>
+
+<div className="text-center">
+  <p className="text-gray-600 mb-4">
+    Want to checkout without an account?
+  </p>
+  <button
+    onClick={() => {
+      console.log('Continue as Guest clicked');
+      // Clear any existing user session data for guest checkout
+      localStorage.removeItem('redirectPath');
+      sessionStorage.removeItem('redirectPath');
+      
+      // Navigate to checkout directly
+      navigate('/checkout');
+    }}
+    className="inline-block w-full border-2 border-primary-500 text-primary-500 hover:bg-primary-50 py-3 px-4 rounded-lg font-semibold transition-colors"
+  >
+    Continue as Guest
+  </button>
+</div>
 
           {/* Sign Up Link */}
           <div className="mt-8 text-center">

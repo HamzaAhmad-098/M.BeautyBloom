@@ -28,6 +28,7 @@ import {
   Legend
 } from 'chart.js';
 import { adminDashboardApi } from '@/services/adminApi';
+import { ErrorBoundary } from 'react-error-boundary';
 import { toast } from 'react-toastify';
 
 ChartJS.register(
@@ -41,6 +42,26 @@ ChartJS.register(
   Tooltip,
   Legend
 );
+
+// Error Fallback Component
+function DashboardErrorFallback({ error, resetErrorBoundary }) {
+  return (
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+          <h2 className="text-xl font-bold text-red-700 mb-2">Dashboard Error</h2>
+          <p className="text-red-600 mb-4">{error.message}</p>
+          <button
+            onClick={resetErrorBoundary}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -75,21 +96,35 @@ const Dashboard = () => {
       setError(null);
       const data = await adminDashboardApi.getDashboardStats();
       
+      // Safely handle response data
+      const userData = data.users || { counts: {}, recentUsers: [] };
+      const orderData = data.orders || { 
+        totalOrders: 0, 
+        monthlyOrders: 0, 
+        yearlyOrders: 0, 
+        totalRevenue: 0, 
+        monthlyRevenue: 0,
+        recentOrders: [],
+        ordersByStatus: []
+      };
+      
       setStats({
         counts: {
-          totalUsers: data.users.counts.totalUsers,
-          verifiedUsers: data.users.counts.verifiedUsers,
-          activeUsers: data.users.counts.activeUsers,
-          adminUsers: data.users.counts.adminUsers,
-          totalOrders: data.orders.totalOrders,
-          monthlyOrders: data.orders.monthlyOrders,
-          yearlyOrders: data.orders.yearlyOrders,
-          totalRevenue: data.orders.totalRevenue,
-          monthlyRevenue: data.orders.monthlyRevenue,
+          totalUsers: userData.counts?.totalUsers || 0,
+          verifiedUsers: userData.counts?.verifiedUsers || 0,
+          activeUsers: userData.counts?.activeUsers || 0,
+          adminUsers: userData.counts?.adminUsers || 0,
+          totalOrders: orderData.totalOrders || 0,
+          monthlyOrders: orderData.monthlyOrders || 0,
+          yearlyOrders: orderData.yearlyOrders || 0,
+          totalRevenue: orderData.totalRevenue || 0,
+          monthlyRevenue: orderData.monthlyRevenue || 0,
+          totalProducts: 0, // You might need to fetch this separately
+          totalCategories: 0, // You might need to fetch this separately
         },
-        recentUsers: data.users.recentUsers || [],
-        recentOrders: data.orders.recentOrders || [],
-        ordersByStatus: data.orders.ordersByStatus || [],
+        recentUsers: userData.recentUsers || [],
+        recentOrders: orderData.recentOrders || [],
+        ordersByStatus: orderData.ordersByStatus || [],
       });
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -478,4 +513,14 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard;
+// Export with ErrorBoundary wrapper
+const DashboardWithErrorBoundary = () => (
+  <ErrorBoundary
+    FallbackComponent={DashboardErrorFallback}
+    onReset={() => window.location.reload()}
+  >
+    <Dashboard />
+  </ErrorBoundary>
+);
+
+export default DashboardWithErrorBoundary;

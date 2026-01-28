@@ -10,9 +10,83 @@ const Cart = () => {
   const dispatch = useDispatch();
   const [updatingId, setUpdatingId] = useState(null);
 
-  const shippingPrice = cartTotal > 2000 ? 0 : 200;
-  const taxPrice = cartTotal * 0.05;
+  const shippingPrice = cartTotal > 2000 ? 0 : 250;
+  const taxPrice = 0;
   const totalPrice = cartTotal + shippingPrice + taxPrice;
+
+  // Helper function to construct Cloudinary image URL
+  const getImageUrl = (imageData) => {
+    if (!imageData) {
+      return 'https://via.placeholder.com/150';
+    }
+
+    // If it's a string, check if it's already a full URL
+    if (typeof imageData === 'string') {
+      if (imageData.includes('http')) {
+        return imageData;
+      }
+      // If it looks like a public_id, construct Cloudinary URL
+      const cloudName = 'dr1rajqzy';
+      const publicId = imageData.startsWith('/') ? imageData.substring(1) : imageData;
+      return `https://res.cloudinary.com/${cloudName}/image/upload/w_200,h_200,c_fill,q_auto,f_auto/${publicId}`;
+    }
+
+    // If it's an object with url property
+    if (imageData.url) {
+      // If it's already a full Cloudinary URL, return it
+      if (imageData.url.includes('cloudinary.com')) {
+        return imageData.url;
+      }
+      // If it's any other URL
+      if (imageData.url.includes('http')) {
+        return imageData.url;
+      }
+      // If url is a public_id, construct URL
+      const cloudName = 'dr1rajqzy';
+      const publicId = imageData.url.startsWith('/') ? imageData.url.substring(1) : imageData.url;
+      return `https://res.cloudinary.com/${cloudName}/image/upload/w_200,h_200,c_fill,q_auto,f_auto/${publicId}`;
+    }
+
+    // If we have a public_id but no URL, construct Cloudinary URL
+    if (imageData.public_id) {
+      const cloudName = 'dr1rajqzy';
+      const publicId = imageData.public_id.startsWith('/') 
+        ? imageData.public_id.substring(1) 
+        : imageData.public_id;
+      return `https://res.cloudinary.com/${cloudName}/image/upload/w_200,h_200,c_fill,q_auto,f_auto/${publicId}`;
+    }
+
+    // Fallback
+    return 'https://via.placeholder.com/150';
+  };
+
+  // Get image URL from item
+  const getItemImageUrl = (item) => {
+    // Try different possible image locations in order of priority
+    if (item.image) {
+      return getImageUrl(item.image);
+    }
+    if (item.product?.images && item.product.images.length > 0) {
+      // Use the same logic as in Products.jsx
+      const firstImage = item.product.images[0];
+      if (firstImage.url) {
+        // Return the Cloudinary URL directly
+        return firstImage.url;
+      }
+      if (firstImage.public_id) {
+        // Construct Cloudinary URL from public_id
+        return `https://res.cloudinary.com/${process.env.CLOUDINARY_CLOUD_NAME || 'dr1rajqzy'}/image/upload/${firstImage.public_id}`;
+      }
+      // Fallback for any other format
+      return typeof firstImage === 'string' 
+        ? firstImage 
+        : 'https://via.placeholder.com/150';
+    }
+    if (item.product?.image) {
+      return getImageUrl(item.product.image);
+    }
+    return 'https://via.placeholder.com/150';
+  };
 
   const handleQuantityChange = async (itemId, newQuantity) => {
     if (newQuantity < 1) return;
@@ -20,7 +94,6 @@ const Cart = () => {
     setUpdatingId(itemId);
     dispatch(updateQuantity({ itemId, quantity: newQuantity }));
     
-    // Simulate loading state
     setTimeout(() => setUpdatingId(null), 300);
   };
 
@@ -92,9 +165,13 @@ const Cart = () => {
                   >
                     <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden bg-gray-100">
                       <img
-                        src={item.image || item.product?.images?.[0] || 'https://via.placeholder.com/150'}
+                        src={getItemImageUrl(item)}
                         alt={item.name || item.product?.name}
                         className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
+                        onError={(e) => { 
+                          e.target.src = 'https://via.placeholder.com/150?text=No+Image';
+                          e.target.onerror = null;
+                        }}
                       />
                     </div>
                   </Link>
@@ -196,7 +273,7 @@ const Cart = () => {
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Tax (5%)</span>
+                  <span className="text-gray-600">Tax (0%)</span>
                   <span className="font-medium">Rs. {taxPrice.toLocaleString()}</span>
                 </div>
                 
@@ -218,20 +295,18 @@ const Cart = () => {
                   Including all taxes and shipping
                 </p>
               </div>
-
               <div className="mt-6 space-y-3">
                 <Link
-                  to={userInfo ? '/checkout' : '/login?redirect=/checkout'}
+                  to="/checkout"
                   className="block w-full bg-gradient-to-r from-primary-500 to-primary-600 hover:opacity-90 text-white text-center py-3 rounded-lg font-semibold transition-all duration-300 transform hover:scale-105 mobile-tap-target"
                 >
-                  {userInfo ? 'Proceed to Checkout' : 'Login to Checkout'}
+                  Proceed to Checkout
                 </Link>
                 
                 <div className="flex items-center justify-center space-x-4 text-sm text-gray-600 mt-4">
                   <span className="px-2 py-1 bg-gray-100 rounded">COD</span>
                   <span className="px-2 py-1 bg-gray-100 rounded">JazzCash</span>
                   <span className="px-2 py-1 bg-gray-100 rounded">Easypaisa</span>
-                  <span className="px-2 py-1 bg-gray-100 rounded">Card</span>
                 </div>
               </div>
             </div>

@@ -1,6 +1,6 @@
 import asyncHandler from 'express-async-handler';
 import Product from '../models/Product.js';
-import { deleteFromUploadcare } from '../config/uploadcare.js';
+import { deleteFromCloudinary } from '../config/cloudinary.js';
 
 // @desc    Get products (paginated & filterable)
 // @route   GET /api/products
@@ -36,6 +36,7 @@ const getProductById = asyncHandler(async (req, res) => {
     throw new Error('Product not found');
   }
 });
+
 // @desc    Create a product
 // @route   POST /api/products
 // @access  Private/Admin
@@ -84,12 +85,12 @@ const createProduct = asyncHandler(async (req, res) => {
   if (images) {
     if (Array.isArray(images)) {
       processedImages = images.map((img) => {
-        // If img is already an object with url
+        // If img is already an object with url and public_id (from Cloudinary)
         if (typeof img === 'object' && img !== null) {
           return {
-            url: img.url || '',
-            public_id: img.public_id || img.file_id || '',
-            alt: img.alt || ''
+            url: img.url || img.secure_url || '',
+            public_id: img.public_id || '',
+            alt: img.alt || name || ''
           };
         }
         // If img is a string URL
@@ -97,7 +98,7 @@ const createProduct = asyncHandler(async (req, res) => {
           return {
             url: img,
             public_id: '',
-            alt: ''
+            alt: name || ''
           };
         }
         return null;
@@ -108,9 +109,9 @@ const createProduct = asyncHandler(async (req, res) => {
         const parsed = JSON.parse(images);
         if (Array.isArray(parsed)) {
           processedImages = parsed.map(img => ({
-            url: typeof img === 'string' ? img : img.url,
-            public_id: typeof img === 'object' ? (img.public_id || img.file_id || '') : '',
-            alt: typeof img === 'object' ? (img.alt || '') : ''
+            url: img.url || img.secure_url || (typeof img === 'string' ? img : ''),
+            public_id: img.public_id || '',
+            alt: img.alt || name || ''
           })).filter(img => img.url);
         }
       } catch (e) {
@@ -118,7 +119,7 @@ const createProduct = asyncHandler(async (req, res) => {
         processedImages = images.split(',')
           .map(url => url.trim())
           .filter(url => url)
-          .map(url => ({ url, public_id: '', alt: '' }));
+          .map(url => ({ url, public_id: '', alt: name || '' }));
       }
     }
   }
@@ -170,6 +171,7 @@ const createProduct = asyncHandler(async (req, res) => {
     throw new Error(saveError.message || 'Failed to save product');
   }
 });
+
 // @desc    Update a product
 // @route   PUT /api/products/:id
 // @access  Private/Admin
@@ -195,6 +197,9 @@ const updateProduct = asyncHandler(async (req, res) => {
   const product = await Product.findById(req.params.id);
 
   if (product) {
+    // Store old images for deletion
+    const oldImages = product.images || [];
+    
     product.name = name || product.name;
     product.price = price !== undefined ? price : product.price;
     product.description = description || product.description;
@@ -214,20 +219,20 @@ const updateProduct = asyncHandler(async (req, res) => {
       const currentPublicIds = (product.images || []).map((i) => i.public_id).filter(Boolean);
       const newPublicIds = images.map((i) => i.public_id).filter(Boolean);
 
-      // Delete removed images from Uploadcare
+      // Delete removed images from Cloudinary
       const toDelete = currentPublicIds.filter((id) => id && !newPublicIds.includes(id));
-      for (const fileId of toDelete) {
+      for (const publicId of toDelete) {
         try {
-          await deleteFromUploadcare(fileId);
+          await deleteFromCloudinary(publicId);
         } catch (err) {
-          console.error('Uploadcare delete error', fileId, err.message || err);
+          console.error('Cloudinary delete error', publicId, err.message || err);
         }
       }
 
       product.images = images.map((i) => ({ 
-        url: i.url, 
-        public_id: i.public_id || i.file_id || '', 
-        alt: i.alt || '' 
+        url: i.url || i.secure_url || '', 
+        public_id: i.public_id || '', 
+        alt: i.alt || name || product.name || '' 
       }));
     }
 
@@ -246,14 +251,14 @@ const deleteProduct = asyncHandler(async (req, res) => {
   const product = await Product.findById(req.params.id);
 
   if (product) {
-    // Delete images from Uploadcare
+    // Delete images from Cloudinary
     if (product.images && product.images.length) {
       for (const img of product.images) {
         if (img.public_id) {
           try {
-            await deleteFromUploadcare(img.public_id);
+            await deleteFromCloudinary(img.public_id);
           } catch (err) {
-            console.error('Uploadcare delete error', img.public_id, err.message || err);
+            console.error('Cloudinary delete error', img.public_id, err.message || err);
           }
         }
       }

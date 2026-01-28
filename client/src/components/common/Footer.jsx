@@ -143,7 +143,7 @@ const Footer = () => {
               <li className="flex items-start space-x-3 text-gray-400">
                 <FaMapMarkerAlt className="text-primary-500 mt-1 flex-shrink-0" />
                 <span className="text-sm sm:text-base">
-                  Urdu Bazaar Near Goga Garments, Kasur  <br />Punjab Pakistan
+                  Urdu Bazaar Near Goga Fabrics, Kasur  <br />Punjab Pakistan
                 </span>
               </li>
             </ul>

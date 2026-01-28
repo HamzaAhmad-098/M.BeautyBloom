@@ -3,13 +3,6 @@ import { FaSearch, FaFilter, FaEye, FaCheck, FaTruck, FaTimes, FaPrint, FaSpinne
 import { adminOrderApi } from '@/services/adminApi.js';
 import { toast } from 'react-toastify';
 
-/*
-  Admin Orders page — themed to match the component you provided.
-  - Preserves existing flows: uses adminOrderApi.getAllOrders and adminOrderApi.updateOrderStatus.
-  - Adds "View Details" modal, "Print" functionality, and a proper status-change modal with dropdown,
-    tracking number and notes fields while keeping the same API calls for status updates.
-*/
-
 const Orders = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -39,6 +32,52 @@ const Orders = () => {
   const [statusSubmitting, setStatusSubmitting] = useState(false);
 
   const statuses = ['All', 'Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
+
+  // Helper function to get image URL (same logic as Products.jsx)
+  const getImageUrl = (imageData) => {
+    if (!imageData) {
+      return 'https://via.placeholder.com/80';
+    }
+
+    // If imageData is a string
+    if (typeof imageData === 'string') {
+      // If it's already a URL
+      if (imageData.includes('http')) {
+        return imageData;
+      }
+      // If it's a public_id, construct Cloudinary URL
+      const cloudName = 'dr1rajqzy';
+      return `https://res.cloudinary.com/${cloudName}/image/upload/w_150,h_150,c_fill,q_auto,f_auto/${imageData}`;
+    }
+
+    // If imageData is an object with url property
+    if (imageData.url) {
+      // Return the Cloudinary URL directly
+      return imageData.url;
+    }
+
+    // If we have a public_id but no URL, construct Cloudinary URL
+    if (imageData.public_id) {
+      // Construct Cloudinary URL from public_id
+      const cloudName = process.env.CLOUDINARY_CLOUD_NAME || 'dr1rajqzy';
+      return `https://res.cloudinary.com/${cloudName}/image/upload/${imageData.public_id}`;
+    }
+
+    // Fallback
+    return 'https://via.placeholder.com/80';
+  };
+
+  // Get image URL for order item
+  const getItemImageUrl = (item) => {
+    // Try different possible image locations
+    if (item.image) {
+      return getImageUrl(item.image);
+    }
+    if (item.images && item.images.length > 0) {
+      return getImageUrl(item.images[0]);
+    }
+    return 'https://via.placeholder.com/80';
+  };
 
   useEffect(() => {
     fetchOrders();
@@ -166,63 +205,57 @@ const Orders = () => {
                 <tr>
                   <td>${i.name}</td>
                   <td>${i.quantity}</td>
-                  <td>Rs. ${Number(i.price).toLocaleString()}</td>
+                  <td>Rs. ${i.price}</td>
                   <td>Rs. ${(i.price * i.quantity).toLocaleString()}</td>
                 </tr>
-              `).join('') || ''}
+              `).join('')}
             </tbody>
           </table>
 
           <div class="totals">
-            <p>Items: Rs. ${Number(order.itemsPrice || 0).toLocaleString()}</p>
-            <p>Tax: Rs. ${Number(order.taxPrice || 0).toLocaleString()}</p>
-            <p>Shipping: Rs. ${Number(order.shippingPrice || 0).toLocaleString()}</p>
-            <p><strong>Total: Rs. ${Number(order.totalPrice || 0).toLocaleString()}</strong></p>
+            <div>Items Price: Rs. ${order.itemsPrice?.toLocaleString() || '0'}</div>
+            <div>Tax: Rs. ${order.taxPrice?.toLocaleString() || '0'}</div>
+            <div>Shipping: Rs. ${order.shippingPrice?.toLocaleString() || '0'}</div>
+            <div style="font-size: 18px; margin-top: 6px;">Total: Rs. ${order.totalPrice?.toLocaleString() || '0'}</div>
           </div>
         </body>
       </html>
     `;
-    const w = window.open('', '_blank', 'noopener,noreferrer');
-    if (!w) {
-      toast.error('Unable to open print window. Please disable popup blocker.');
-      return;
+    const w = window.open('', '', 'width=800,height=600');
+    if (w) {
+      w.document.write(html);
+      w.document.close();
+      w.print();
     }
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
-    w.focus();
-    setTimeout(() => w.print(), 300);
   };
 
   const openStatusModal = (order) => {
     setStatusOrder(order);
     setNewStatus(order.status || 'Processing');
-    setTrackingNumber(order.trackingNumber || '');
-    setStatusNotes(order.notes || '');
+    setTrackingNumber('');
+    setStatusNotes('');
     setStatusModalOpen(true);
   };
 
-  // Keep using adminOrderApi.updateOrderStatus — preserving current flow
   const submitStatusChange = async () => {
     if (!statusOrder) return;
-    setStatusSubmitting(true);
     try {
-      await adminOrderApi.updateOrderStatus(statusOrder._id, {
-        status: newStatus,
-        trackingNumber: trackingNumber || undefined,
-        notes: statusNotes || undefined,
-      });
-      toast.success('Order status updated');
+      setStatusSubmitting(true);
+      const payload = { status: newStatus };
+      if (trackingNumber.trim()) payload.trackingNumber = trackingNumber.trim();
+      if (statusNotes.trim()) payload.notes = statusNotes.trim();
+      await adminOrderApi.updateOrderStatus(statusOrder._id, payload);
+      toast.success('Order status updated successfully');
       setStatusModalOpen(false);
       setStatusOrder(null);
-      // refresh list and view
-      await fetchOrders();
-      if (viewOrder && viewOrder._id === statusOrder._id) {
-        await openViewOrder(statusOrder._id);
+      fetchOrders();
+      // If we are in view modal, refresh that order
+      if (viewOpen && viewOrder?._id === statusOrder._id) {
+        openViewOrder(statusOrder._id);
       }
-    } catch (err) {
-      console.error('Failed changing status', err);
-      toast.error(err?.response?.data?.message || 'Failed to update status');
+    } catch (error) {
+      console.error('Error updating order status:', error);
+      toast.error(error?.response?.data?.message || 'Failed to update order status');
     } finally {
       setStatusSubmitting(false);
     }
@@ -233,129 +266,93 @@ const Orders = () => {
       case 'Delivered': return 'bg-green-100 text-green-800';
       case 'Shipped': return 'bg-blue-100 text-blue-800';
       case 'Processing': return 'bg-yellow-100 text-yellow-800';
-      case 'Pending': return 'bg-gray-100 text-gray-800';
       case 'Cancelled': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const getPaymentColor = (isPaid) => {
-    return isPaid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center h-64">
+            <FaSpinner className="animate-spin text-4xl text-primary-500" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
+    <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900">Orders Management</h1>
-          <p className="text-gray-600 mt-2">Manage and track customer orders</p>
+          <p className="text-gray-600 mt-2">Manage and track all customer orders</p>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-blue-600">Total Orders</p>
-                <p className="text-2xl font-bold text-blue-700 mt-1">{stats.total}</p>
-              </div>
-              <div className="p-3 bg-white rounded-lg shadow-sm">
-                <FaFilter className="text-2xl text-blue-500" />
-              </div>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm text-gray-600 mb-1">Total Orders</div>
+            <div className="text-3xl font-bold text-gray-900">{stats.total}</div>
           </div>
-          <div className="bg-gradient-to-r from-green-50 to-green-100 border border-green-200 rounded-xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-green-600">Completed</p>
-                <p className="text-2xl font-bold text-green-700 mt-1">{stats.completed}</p>
-              </div>
-              <div className="p-3 bg-white rounded-lg shadow-sm">
-                <FaCheck className="text-2xl text-green-500" />
-              </div>
-            </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm text-gray-600 mb-1">Completed</div>
+            <div className="text-3xl font-bold text-green-600">{stats.completed}</div>
           </div>
-          <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 border border-yellow-200 rounded-xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-yellow-600">In Progress</p>
-                <p className="text-2xl font-bold text-yellow-700 mt-1">{stats.inProgress}</p>
-              </div>
-              <div className="p-3 bg-white rounded-lg shadow-sm">
-                <FaTruck className="text-2xl text-yellow-500" />
-              </div>
-            </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm text-gray-600 mb-1">In Progress</div>
+            <div className="text-3xl font-bold text-blue-600">{stats.inProgress}</div>
           </div>
-          <div className="bg-gradient-to-r from-red-50 to-red-100 border border-red-200 rounded-xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-red-600">Cancelled</p>
-                <p className="text-2xl font-bold text-red-700 mt-1">{stats.cancelled}</p>
-              </div>
-              <div className="p-3 bg-white rounded-lg shadow-sm">
-                <FaTimes className="text-2xl text-red-500" />
-              </div>
-            </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm text-gray-600 mb-1">Cancelled</div>
+            <div className="text-3xl font-bold text-red-600">{stats.cancelled}</div>
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200 mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Search */}
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <FaSearch className="text-gray-400" />
+        {/* Filters and Search */}
+        <div className="bg-white rounded-lg shadow mb-6">
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1">
+                <div className="relative">
+                  <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search by order ID, customer name or email..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
               </div>
-              <input
-                type="text"
-                placeholder="Search orders..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              />
-            </div>
-
-            {/* Status Filter */}
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <FaFilter className="text-gray-400" />
+              <div className="flex gap-4">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  {statuses.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+                <select
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="All">All Time</option>
+                  <option value="Today">Today</option>
+                  <option value="Week">This Week</option>
+                  <option value="Month">This Month</option>
+                </select>
               </div>
-              <select
-                value={statusFilter}
-                onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-                className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              >
-                {statuses.map(status => (
-                  <option key={status} value={status}>{status}</option>
-                ))}
-              </select>
             </div>
-
-            {/* Date Filter */}
-            <div>
-              <select
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="block w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              >
-                <option value="All">All Time</option>
-                <option value="Today">Today</option>
-                <option value="Week">This Week</option>
-                <option value="Month">This Month</option>
-              </select>
-            </div>
-
-            {/* Export Button */}
-            <button className="px-4 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium">
-              Export Orders
-            </button>
           </div>
-        </div>
 
-        {/* Orders Table */}
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
+          {/* Orders Table */}
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -375,28 +372,24 @@ const Orders = () => {
                   filteredOrders.map((order) => (
                     <tr key={order._id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">#{order._id.slice(-8)}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">{order.user?.name || order.guestUser?.name || 'Guest'}</div>
-                          <div className="text-sm text-gray-500">{order.user?.email || order.guestUser?.email || 'N/A'}</div>
-                        </div>
+                        <span className="text-sm font-medium text-gray-900">#{order._id?.slice(-6)}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </div>
+                        <div className="text-sm text-gray-900">{order.user?.name || order.guestUser?.name || 'Guest'}</div>
+                        <div className="text-xs text-gray-500">{order.user?.email || order.guestUser?.email || ''}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{order.orderItems?.length || 0} items</div>
+                        <span className="text-sm text-gray-900">{new Date(order.createdAt).toLocaleDateString()}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-semibold text-gray-900">Rs. {Number(order.totalPrice || 0).toLocaleString()}</div>
+                        <span className="text-sm text-gray-900">{order.orderItems?.length || 0}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getPaymentColor(order.isPaid)}`}>
-                          {order.isPaid ? 'Paid' : 'Pending'}
+                        <span className="text-sm font-semibold text-gray-900">Rs. {Number(order.totalPrice).toLocaleString()}</span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${order.isPaid ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                          {order.isPaid ? 'Paid' : order.paymentMethod || 'COD'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -484,7 +477,15 @@ const Orders = () => {
                   {viewOrder.orderItems.map((it) => (
                     <div key={it.product} className="flex items-center justify-between border p-3 rounded">
                       <div className="flex items-center gap-3">
-                        <img src={it.image || 'https://via.placeholder.com/80'} alt={it.name} className="w-16 h-16 object-cover rounded" />
+                        <img 
+                          src={getItemImageUrl(it)} 
+                          alt={it.name} 
+                          className="w-16 h-16 object-cover rounded"
+                          onError={(e) => {
+                            e.target.src = 'https://via.placeholder.com/80?text=No+Image';
+                            e.target.onerror = null;
+                          }}
+                        />
                         <div>
                           <div className="font-medium">{it.name}</div>
                           <div className="text-sm text-gray-500">Qty: {it.quantity} {it.variant ? `• ${it.variant}` : ''}</div>

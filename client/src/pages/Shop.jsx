@@ -66,29 +66,66 @@ const Shop = () => {
         params.append('pageNumber', currentPage);
         params.append('pageSize', 12);
 
-        // Replace with your actual API endpoint
-        const response = await axios.get(`/api/products?${params}`);
+        // Use the correct API URL
+        const API_URL = import.meta.env.VITE_API_URL || 
+          (window.location.origin === 'https://ingenious-laughter-production.up.railway.app' 
+            ? '/api' 
+            : 'http://localhost:5000/api');
+        
+        const response = await axios.get(`${API_URL}/products?${params}`);
         
         console.log('Products response:', response.data);
         
         // Handle different response structures
         const productsData = response.data.products || response.data || [];
         
-        // Process products to add image URLs for UploadCare
+        // Process products to ensure proper image URLs AND stock data
         const processedProducts = Array.isArray(productsData) 
           ? productsData.map(product => {
               // Create a copy of the product
               const processedProduct = { ...product };
               
-              // If product has images with public_id, create the full image URL
-              if (product.images && product.images.length > 0 && product.images[0].public_id) {
-                const publicId = product.images[0].public_id.startsWith('/') 
-                  ? product.images[0].public_id.substring(1) 
-                  : product.images[0].public_id;
-                
-                // Add the constructed URL to the product object
-                processedProduct.fullImageUrl = `https://s2vbpeuic7.ucarecd.net/${publicId}/-/preview/872x1000/`;
+              // CRITICAL FIX: Handle stock field properly
+              // Backends often use countInStock, frontend uses stock
+              if (product.countInStock !== undefined) {
+                processedProduct.stock = product.countInStock;
+              } else if (product.stock !== undefined) {
+                processedProduct.stock = product.stock;
+              } else {
+                processedProduct.stock = 0; // Default if no stock info
               }
+              
+              // Also set countInStock for consistency
+              processedProduct.countInStock = processedProduct.stock;
+              
+              // Process images array for Cloudinary
+              if (product.images && product.images.length > 0) {
+                // Map through images to ensure proper format
+                processedProduct.images = product.images.map(img => {
+                  // If image is a string URL, convert to object
+                  if (typeof img === 'string') {
+                    return {
+                      url: img,
+                      public_id: extractPublicIdFromCloudinaryUrl(img),
+                      alt: product.name || 'Product image'
+                    };
+                  }
+                  
+                  // If image has Cloudinary public_id but no URL, construct URL
+                  if (img.public_id && (!img.url || !img.url.includes('cloudinary.com'))) {
+                    const cloudName = 'dr1rajqzy'; // Your Cloudinary cloud name
+                    img.url = `https://res.cloudinary.com/${cloudName}/image/upload/w_800,h_600,c_fill,q_auto,f_auto/${img.public_id}`;
+                  }
+                  
+                  return img;
+                });
+              }
+              
+              console.log('Processed product stock:', {
+                original: product.stock,
+                countInStock: product.countInStock,
+                final: processedProduct.stock
+              });
               
               return processedProduct;
             })
@@ -108,6 +145,28 @@ const Shop = () => {
 
     fetchProducts();
   }, [filters, currentPage]);
+
+  // Helper function to extract public_id from Cloudinary URL
+  const extractPublicIdFromCloudinaryUrl = (url) => {
+    if (!url || !url.includes('cloudinary.com')) return null;
+    
+    try {
+      const urlObj = new URL(url);
+      const pathParts = urlObj.pathname.split('/');
+      
+      // Find the upload folder and get everything after it
+      const uploadIndex = pathParts.indexOf('upload');
+      if (uploadIndex !== -1) {
+        // Join all parts after 'upload' and remove file extension
+        const publicIdWithExt = pathParts.slice(uploadIndex + 2).join('/');
+        return publicIdWithExt.replace(/\.[^/.]+$/, ''); // Remove file extension
+      }
+    } catch (error) {
+      console.warn('Error extracting public_id from URL:', url);
+    }
+    
+    return null;
+  };
 
   const handleFilterChange = (newFilters) => {
     const updatedFilters = { ...filters, ...newFilters };

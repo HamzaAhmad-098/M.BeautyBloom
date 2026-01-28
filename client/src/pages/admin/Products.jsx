@@ -44,6 +44,7 @@ function AdminProducts() {
     }
   };
 
+// Replace the getImageUrl function with this Cloudinary-compatible version:
 const getImageUrl = (product) => {
   if (!product.images || product.images.length === 0) {
     return 'https://via.placeholder.com/300x300?text=No+Image';
@@ -51,17 +52,22 @@ const getImageUrl = (product) => {
 
   const firstImage = product.images[0];
 
-  // Use public_id if available
-  if (firstImage.public_id) {
-    return `https://s2vbpeuic7.ucarecd.net/${firstImage.public_id}/-/preview/1000x666/`;
-  }
-
-  // fallback to URL if public_id is missing
+  // Use Cloudinary URL
   if (firstImage.url) {
-    return firstImage.url.split('/-/')[0];
+    // Return the Cloudinary URL directly
+    return firstImage.url;
   }
 
-  return 'https://via.placeholder.com/300x300?text=No+Image';
+  // If we have a public_id but no URL, construct Cloudinary URL
+  if (firstImage.public_id) {
+    // Construct Cloudinary URL from public_id
+    return `https://res.cloudinary.com/${process.env.CLOUDINARY_CLOUD_NAME}/image/upload/${firstImage.public_id}`;
+  }
+
+  // Fallback for any other format
+  return typeof firstImage === 'string' 
+    ? firstImage 
+    : 'https://via.placeholder.com/300x300?text=No+Image';
 };
 
 
@@ -146,7 +152,11 @@ const getImageUrl = (product) => {
                     src={getImageUrl(product)}
                     alt={product.name}
                     className="w-full h-full object-cover"
-                    onError={(e) => { e.target.src = 'https://via.placeholder.com/300x300?text=No+Image'; }}
+                    onError={(e) => { 
+                      e.target.src = 'https://via.placeholder.com/300x300?text=No+Image';
+                      e.target.onerror = null; // Prevent infinite loop
+                    }}
+                    loading="lazy"
                   />
 
                   {product.isFeatured && (

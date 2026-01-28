@@ -21,26 +21,90 @@ const ProductDetails = () => {
   const [activeTab, setActiveTab] = useState('description');
   const [isWishlisted, setIsWishlisted] = useState(false);
 
-  useEffect(() => {
-    const fetchProduct = async () => {
-      try {
-        setLoading(true);
-        const response = await axios.get(`/api/products/${id}`);
-        setProduct(response.data);
-        setReviews(response.data.reviews || []);
-        if (response.data.variants && response.data.variants.length > 0) {
-          setSelectedVariant(response.data.variants[0].name);
-        }
-      } catch (error) {
-        toast.error('Product not found');
-        navigate('/shop');
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Helper function to construct Cloudinary image URL
+  const constructImageUrl = (imageData) => {
+    if (!imageData) {
+      return 'https://via.placeholder.com/600';
+    }
 
-    fetchProduct();
-  }, [id, navigate]);
+    // If it's a string, check if it's already a full URL
+    if (typeof imageData === 'string') {
+      if (imageData.includes('http')) {
+        return imageData;
+      }
+      // If it looks like a public_id, construct Cloudinary URL
+      const cloudName = 'dr1rajqzy';
+      const publicId = imageData.startsWith('/') ? imageData.substring(1) : imageData;
+      return `https://res.cloudinary.com/${cloudName}/image/upload/w_800,h_600,c_fill,q_auto,f_auto/${publicId}`;
+    }
+
+    // If it's an object with url property
+    if (imageData.url) {
+      // If it's already a full Cloudinary URL, return it
+      if (imageData.url.includes('cloudinary.com')) {
+        return imageData.url;
+      }
+      // If it's any other URL
+      if (imageData.url.includes('http')) {
+        return imageData.url;
+      }
+    }
+
+    // If we have a public_id but no URL, construct Cloudinary URL
+    if (imageData.public_id) {
+      const cloudName = 'dr1rajqzy';
+      const publicId = imageData.public_id.startsWith('/') 
+        ? imageData.public_id.substring(1) 
+        : imageData.public_id;
+      return `https://res.cloudinary.com/${cloudName}/image/upload/w_800,h_600,c_fill,q_auto,f_auto/${publicId}`;
+    }
+
+    // Fallback
+    return 'https://via.placeholder.com/600';
+  };
+
+useEffect(() => {
+  const fetchProduct = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`/api/products/${id}`);
+      const productData = response.data;
+      
+      // CRITICAL FIX: Handle stock field properly
+      // Backends often use countInStock, frontend uses stock
+      if (productData.countInStock !== undefined) {
+        productData.stock = productData.countInStock;
+      } else if (productData.stock !== undefined) {
+        productData.stock = productData.stock;
+      } else {
+        productData.stock = 0; // Default if no stock info
+      }
+      
+      // Also set countInStock for consistency
+      productData.countInStock = productData.stock;
+      
+      console.log('Product details stock:', {
+        originalStock: response.data.stock,
+        originalCountInStock: response.data.countInStock,
+        finalStock: productData.stock
+      });
+      
+      setProduct(productData);
+      setReviews(productData.reviews || []);
+      if (productData.variants && productData.variants.length > 0) {
+        setSelectedVariant(productData.variants[0].name);
+      }
+    } catch (error) {
+      console.error('Error fetching product details:', error);
+      toast.error('Product not found');
+      navigate('/shop');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchProduct();
+}, [id, navigate]);
 
   const handleAddToCart = () => {
     if (product.stock < quantity) {
@@ -159,7 +223,7 @@ const ProductDetails = () => {
               {/* Main Image */}
               <div className="bg-white rounded-xl shadow-lg overflow-hidden mb-4">
                 <img
-                  src={product.images?.[selectedImage] || 'https://via.placeholder.com/600'}
+                  src={constructImageUrl(product.images?.[selectedImage])}
                   alt={product.name}
                   className="w-full h-[500px] object-contain p-8"
                 />
@@ -179,7 +243,7 @@ const ProductDetails = () => {
                       }`}
                     >
                       <img
-                        src={img}
+                        src={constructImageUrl(img)}
                         alt={`${product.name} ${index + 1}`}
                         className="w-full h-full object-cover"
                       />
@@ -198,18 +262,16 @@ const ProductDetails = () => {
                 <span className="text-sm text-gray-500 uppercase tracking-wider">
                   {product.brand}
                 </span>
-                <h1 className="text-3xl font-bold text-gray-900 mt-1">
-                  {product.name}
-                </h1>
+                <h1 className="text-3xl font-bold text-gray-900 mt-2">{product.name}</h1>
               </div>
 
               {/* Rating */}
-              <div className="flex items-center mb-4">
+              <div className="flex items-center mb-6">
                 <div className="flex items-center">
                   {[...Array(5)].map((_, i) => (
                     <FaStar
                       key={i}
-                      className={`text-lg ${
+                      className={`${
                         i < Math.floor(product.rating || 0)
                           ? 'text-yellow-400'
                           : 'text-gray-300'
@@ -218,149 +280,144 @@ const ProductDetails = () => {
                   ))}
                 </div>
                 <span className="ml-2 text-gray-600">
-                  {product.rating?.toFixed(1) || '0.0'} ({product.numReviews || 0} reviews)
-                </span>
-                <span className="mx-3 text-gray-300">•</span>
-                <span className={`text-sm font-medium ${
-                  product.stock > 10 ? 'text-green-600' : 
-                  product.stock > 0 ? 'text-yellow-600' : 'text-red-600'
-                }`}>
-                  {product.stock > 10 ? 'In Stock' : 
-                   product.stock > 0 ? `Only ${product.stock} left` : 'Out of Stock'}
+                  ({product.numReviews || 0} reviews)
                 </span>
               </div>
 
               {/* Price */}
               <div className="mb-6">
-                <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-3">
                   <span className="text-4xl font-bold text-gray-900">
-                    Rs. {price.toLocaleString()}
+                    Rs. {price?.toLocaleString()}
                   </span>
                   {originalPrice && (
                     <>
-                      <span className="text-2xl text-gray-500 line-through">
+                      <span className="text-xl text-gray-500 line-through">
                         Rs. {originalPrice.toLocaleString()}
                       </span>
-                      <span className="bg-red-500 text-white px-3 py-1 rounded-full text-sm font-bold">
-                        Save {discountPercentage}%
+                      <span className="bg-red-100 text-red-600 px-3 py-1 rounded-full text-sm font-semibold">
+                        {discountPercentage}% OFF
                       </span>
                     </>
                   )}
                 </div>
+                <p className="text-sm text-gray-500 mt-2">Inclusive of all taxes</p>
+              </div>
+
+              {/* Stock Status */}
+              <div className="mb-6">
+                {product.stock > 0 ? (
+                  <div className="flex items-center text-green-600">
+                    <FaCheck className="mr-2" />
+                    <span className="font-medium">
+                      {product.stock > 10 ? 'In Stock' : `Only ${product.stock} left in stock`}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center text-red-600">
+                    <span className="font-medium">Out of Stock</span>
+                  </div>
+                )}
               </div>
 
               {/* Variants */}
               {product.variants && product.variants.length > 0 && (
                 <div className="mb-6">
-                  <h3 className="font-semibold text-gray-700 mb-3">Select Variant:</h3>
-                  <div className="flex flex-wrap gap-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Variant
+                  </label>
+                  <div className="flex flex-wrap gap-2">
                     {product.variants.map((variant, index) => (
                       <button
                         key={index}
                         onClick={() => setSelectedVariant(variant.name)}
-                        className={`px-4 py-2 rounded-lg border-2 ${
+                        className={`px-4 py-2 rounded-lg border-2 transition-all ${
                           selectedVariant === variant.name
                             ? 'border-primary-500 bg-primary-50 text-primary-700'
                             : 'border-gray-300 hover:border-gray-400'
                         }`}
                       >
                         {variant.name}
-                        {variant.price !== price && (
-                          <span className="ml-2 text-sm">(+Rs. {variant.price - price})</span>
-                        )}
                       </button>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Quantity */}
+              {/* Quantity Selector */}
               <div className="mb-6">
-                <h3 className="font-semibold text-gray-700 mb-3">Quantity:</h3>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Quantity
+                </label>
                 <div className="flex items-center space-x-4">
                   <div className="flex items-center border border-gray-300 rounded-lg">
                     <button
                       onClick={() => handleQuantityChange('decrease')}
-                      className="p-3 hover:bg-gray-100"
-                      disabled={quantity <= 1}
+                      disabled={quantity === 1}
+                      className="px-4 py-2 hover:bg-gray-100 disabled:opacity-50"
                     >
-                      <FaMinus className="text-gray-600" />
+                      <FaMinus />
                     </button>
-                    <span className="w-16 text-center text-lg font-medium">
-                      {quantity}
-                    </span>
+                    <span className="px-6 py-2 border-x">{quantity}</span>
                     <button
                       onClick={() => handleQuantityChange('increase')}
-                      className="p-3 hover:bg-gray-100"
                       disabled={quantity >= product.stock}
+                      className="px-4 py-2 hover:bg-gray-100 disabled:opacity-50"
                     >
-                      <FaPlus className="text-gray-600" />
+                      <FaPlus />
                     </button>
                   </div>
-                  <span className="text-gray-600">
-                    {product.stock} available
-                  </span>
                 </div>
               </div>
 
-              {/* Actions */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              {/* Action Buttons */}
+              <div className="space-y-3 mb-6">
                 <button
                   onClick={handleAddToCart}
                   disabled={product.stock === 0}
-                  className={`py-3 px-6 rounded-lg font-semibold flex items-center justify-center space-x-2 ${
-                    product.stock === 0
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-primary-500 hover:bg-primary-600 text-white'
-                  }`}
+                  className="w-full bg-gradient-to-r from-primary-500 to-primary-600 text-white py-3 rounded-lg font-medium hover:from-primary-600 hover:to-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all"
                 >
-                  <span>Add to Cart</span>
+                  Add to Cart
                 </button>
                 <button
                   onClick={handleBuyNow}
                   disabled={product.stock === 0}
-                  className={`py-3 px-6 rounded-lg font-semibold ${
-                    product.stock === 0
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-gray-900 hover:bg-black text-white'
-                  }`}
+                  className="w-full bg-gradient-to-r from-orange-500 to-orange-600 text-white py-3 rounded-lg font-medium hover:from-orange-600 hover:to-orange-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all"
                 >
                   Buy Now
                 </button>
               </div>
 
-              {/* Secondary Actions */}
-              <div className="flex space-x-4">
+              {/* Wishlist & Share */}
+              <div className="flex space-x-3 mb-6">
                 <button
                   onClick={() => setIsWishlisted(!isWishlisted)}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg ${
+                  className={`flex-1 py-3 rounded-lg border-2 font-medium transition-all ${
                     isWishlisted
-                      ? 'text-red-600 bg-red-50'
-                      : 'text-gray-600 hover:text-gray-900'
+                      ? 'border-red-500 bg-red-50 text-red-600'
+                      : 'border-gray-300 hover:border-gray-400'
                   }`}
                 >
-                  <FaHeart />
-                  <span>{isWishlisted ? 'Wishlisted' : 'Add to Wishlist'}</span>
+                  <FaHeart className={`inline mr-2 ${isWishlisted ? 'fill-current' : ''}`} />
+                  {isWishlisted ? 'Added to Wishlist' : 'Add to Wishlist'}
                 </button>
                 <button
                   onClick={handleShare}
-                  className="flex items-center space-x-2 px-4 py-2 rounded-lg text-gray-600 hover:text-gray-900"
+                  className="flex-1 py-3 rounded-lg border-2 border-gray-300 hover:border-gray-400 font-medium transition-all"
                 >
-                  <FaShareAlt />
-                  <span>Share</span>
+                  <FaShareAlt className="inline mr-2" />
+                  Share
                 </button>
               </div>
 
               {/* Features */}
-              <div className="mt-8 pt-6 border-t">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="border-t pt-6">
+                <div className="grid grid-cols-3 gap-4">
                   {features.map((feature, index) => (
                     <div key={index} className="text-center">
-                      <div className="text-primary-500 text-2xl mb-2 flex justify-center">
-                        {feature.icon}
-                      </div>
-                      <h4 className="font-semibold text-gray-900">{feature.text}</h4>
-                      <p className="text-sm text-gray-600">{feature.subtext}</p>
+                      <div className="text-2xl text-primary-500 mb-2">{feature.icon}</div>
+                      <div className="text-sm font-medium text-gray-900">{feature.text}</div>
+                      <div className="text-xs text-gray-500 mt-1">{feature.subtext}</div>
                     </div>
                   ))}
                 </div>

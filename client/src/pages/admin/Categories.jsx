@@ -75,41 +75,87 @@ const Categories = () => {
     }
   };
 
-  const handleAddCategory = async () => {
-    if (!newCategory.name.trim()) {
-      toast.error('Category name is required');
-      return;
-    }
+  // Update the handleAddCategory function in Categories.jsx
+const handleAddCategory = async () => {
+  if (!newCategory.name.trim()) {
+    toast.error('Category name is required');
+    return;
+  }
+  
+  try {
+    console.log('🔄 Creating category...', newCategory);
     
-    try {
-      await adminCategoryApi.createCategory(newCategory);
-      toast.success('Category created successfully');
-      setNewCategory({ name: '', description: '', isActive: true, image: '' });
-      setShowAddModal(false);
-      fetchCategories();
-    } catch (error) {
-      console.error('Error creating category:', error);
-      toast.error(error.response?.data?.message || 'Failed to create category');
-    }
-  };
-
-  const handleEditCategory = async () => {
-    if (!editingCategory || !editingCategory.name.trim()) {
-      toast.error('Category name is required');
-      return;
-    }
+    // Ensure required fields are present
+    const categoryData = {
+      name: newCategory.name.trim(),
+      description: newCategory.description?.trim() || '',
+      image: newCategory.image?.trim() || '',
+      isActive: newCategory.isActive,
+      // Add optional fields with defaults
+      parentCategory: null,
+      order: 0
+    };
     
-    try {
-      await adminCategoryApi.updateCategory(editingCategory._id, editingCategory);
-      toast.success('Category updated successfully');
-      setEditingCategory(null);
-      fetchCategories();
-    } catch (error) {
-      console.error('Error updating category:', error);
-      toast.error(error.response?.data?.message || 'Failed to update category');
-    }
-  };
+    console.log('📤 Sending category data:', categoryData);
+    
+    const result = await adminCategoryApi.createCategory(categoryData);
+    console.log('✅ Category created successfully:', result);
+    
+    toast.success('Category created successfully');
+    setNewCategory({ name: '', description: '', isActive: true, image: '' });
+    setShowAddModal(false);
+    fetchCategories(); // Refresh the list
+  } catch (error) {
+    console.error('❌ Error creating category:', error);
+    console.error('Error details:', error.response?.data);
+    
+    // Show detailed error message
+    const errorMessage = error.response?.data?.message || 
+                        error.response?.data?.error || 
+                        error.message || 
+                        'Failed to create category';
+    
+    toast.error(`Error: ${errorMessage}`);
+  }
+};
 
+// Also update the handleEditCategory function
+const handleEditCategory = async () => {
+  if (!editingCategory || !editingCategory.name.trim()) {
+    toast.error('Category name is required');
+    return;
+  }
+  
+  try {
+    console.log('🔄 Updating category...', editingCategory);
+    
+    const categoryData = {
+      name: editingCategory.name.trim(),
+      description: editingCategory.description?.trim() || '',
+      image: editingCategory.image?.trim() || '',
+      isActive: editingCategory.isActive,
+      parentCategory: editingCategory.parentCategory || null,
+      order: editingCategory.order || 0
+    };
+    
+    const result = await adminCategoryApi.updateCategory(editingCategory._id, categoryData);
+    console.log('✅ Category updated successfully:', result);
+    
+    toast.success('Category updated successfully');
+    setEditingCategory(null);
+    fetchCategories();
+  } catch (error) {
+    console.error('❌ Error updating category:', error);
+    console.error('Error details:', error.response?.data);
+    
+    const errorMessage = error.response?.data?.message || 
+                        error.response?.data?.error || 
+                        error.message || 
+                        'Failed to update category';
+    
+    toast.error(`Error: ${errorMessage}`);
+  }
+};
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">

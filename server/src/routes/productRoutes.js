@@ -15,11 +15,13 @@ import {
   deleteProductReview,
 } from '../controllers/productController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
-import { upload, uploadToCloudinary } from '../config/cloudinary.js';
+// Remove upload imports - handled by separate uploadRoutes
 
 const router = express.Router();
 
-router.route('/').get(getProducts).post(protect, admin, createProduct);
+router.route('/')
+  .get(getProducts)
+  .post(protect, admin, createProduct);
 
 router.route('/top').get(getTopProducts);
 router.route('/featured').get(getFeaturedProducts);
@@ -40,27 +42,7 @@ router
 
 router.route('/category/:category').get(getProductsByCategory);
 
-// Image upload route — accepts up to 5 images in memory and uploads to Cloudinary
-router.post(
-  '/upload',
-  protect,
-  admin,
-  upload.array('images', 5),
-  async (req, res, next) => {
-    try {
-      if (!req.files || !req.files.length) {
-        return res.status(400).json({ message: 'No files provided' });
-      }
-
-      const uploaded = await Promise.all(req.files.map((file) => uploadToCloudinary(file.buffer)));
-
-      const images = uploaded.map((r) => ({ url: r.secure_url, public_id: r.public_id }));
-
-      res.json(images);
-    } catch (err) {
-      next(err);
-    }
-  }
-);
+// REMOVE the upload route - it's already handled by uploadRoutes.js
+// Image upload should be done via /api/upload or /api/admin/upload/images
 
 export default router;
