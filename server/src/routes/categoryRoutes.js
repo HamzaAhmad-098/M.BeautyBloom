@@ -16,20 +16,45 @@ router.get('/', asyncHandler(async (req, res) => {
 // @desc    Create a category
 // @route   POST /api/categories
 // @access  Private/Admin
-// In categoryRoutes.js - Update the POST route
 router.post('/', protect, admin, asyncHandler(async (req, res) => {
   const { name, description, image, parentCategory, order, isActive } = req.body;
   
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  // Validate required fields
+  if (!name || name.trim() === '') {
+    res.status(400);
+    throw new Error('Category name is required');
+  }
+  
+  // Generate slug with proper validation
+  let slug = name.toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/-+/g, '-') // Replace multiple hyphens with single
+    .replace(/^-+/, '') // Remove leading hyphens
+    .replace(/-+$/, ''); // Remove trailing hyphens
+  
+  // If slug is empty after processing (e.g., name is only special chars)
+  if (!slug || slug === '') {
+    // Generate a unique slug with timestamp
+    slug = `category-${Date.now()}`;
+  }
+  
+  // Check if slug already exists
+  const slugExists = await Category.findOne({ slug });
+  if (slugExists) {
+    // Append timestamp to make it unique
+    slug = `${slug}-${Date.now()}`;
+  }
   
   const category = new Category({
-    name,
+    name: name.trim(),
     slug,
-    description,
-    image,
+    description: description?.trim() || '',
+    image: image?.trim() || '',
     parentCategory: parentCategory || null,
     order: order || 0,
-    isActive: isActive !== undefined ? isActive : true, // Add this line
+    isActive: isActive !== undefined ? isActive : true,
   });
   
   const createdCategory = await category.save();
@@ -44,23 +69,45 @@ router.put('/:id', protect, admin, asyncHandler(async (req, res) => {
   
   const category = await Category.findById(req.params.id);
   
-  if (category) {
-    category.name = name || category.name;
-    if (name) {
-      category.slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-    }
-    category.description = description || category.description;
-    category.image = image || category.image;
-    category.parentCategory = parentCategory || category.parentCategory;
-    category.order = order !== undefined ? order : category.order;
-    category.isActive = isActive !== undefined ? isActive : category.isActive;
-    
-    const updatedCategory = await category.save();
-    res.json(updatedCategory);
-  } else {
+  if (!category) {
     res.status(404);
     throw new Error('Category not found');
   }
+  
+  // Update fields
+  if (name && name !== category.name) {
+    category.name = name.trim();
+    
+    // Generate new slug when name changes
+    let slug = name.toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+/, '')
+      .replace(/-+$/, '');
+    
+    if (!slug || slug === '') {
+      slug = `category-${Date.now()}`;
+    }
+    
+    // Check if new slug already exists (excluding current category)
+    const slugExists = await Category.findOne({ slug, _id: { $ne: category._id } });
+    if (slugExists) {
+      slug = `${slug}-${Date.now()}`;
+    }
+    
+    category.slug = slug;
+  }
+  
+  category.description = description?.trim() || category.description;
+  category.image = image?.trim() || category.image;
+  category.parentCategory = parentCategory !== undefined ? parentCategory : category.parentCategory;
+  category.order = order !== undefined ? order : category.order;
+  category.isActive = isActive !== undefined ? isActive : category.isActive;
+  
+  const updatedCategory = await category.save();
+  res.json(updatedCategory);
 }));
 
 // @desc    Delete a category
@@ -69,22 +116,22 @@ router.put('/:id', protect, admin, asyncHandler(async (req, res) => {
 router.delete('/:id', protect, admin, asyncHandler(async (req, res) => {
   const category = await Category.findById(req.params.id);
   
-  if (category) {
-    // Check if category has products
-    const Product = (await import('../models/Product.js')).default;
-    const productsCount = await Product.countDocuments({ category: category.name });
-    
-    if (productsCount > 0) {
-      res.status(400);
-      throw new Error(`Cannot delete category with ${productsCount} products. Move products first.`);
-    }
-    
-    await category.deleteOne();
-    res.json({ message: 'Category removed' });
-  } else {
+  if (!category) {
     res.status(404);
     throw new Error('Category not found');
   }
+  
+  // Check if category has products
+  const Product = (await import('../models/Product.js')).default;
+  const productsCount = await Product.countDocuments({ category: category.name });
+  
+  if (productsCount > 0) {
+    res.status(400);
+    throw new Error(`Cannot delete category with ${productsCount} products. Move products first.`);
+  }
+  
+  await category.deleteOne();
+  res.json({ message: 'Category removed' });
 }));
 
 // @desc    Get category by slug

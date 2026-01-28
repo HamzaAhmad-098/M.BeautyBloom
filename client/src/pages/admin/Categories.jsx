@@ -76,22 +76,36 @@ const Categories = () => {
   };
 
   // Update the handleAddCategory function in Categories.jsx
+// In the handleAddCategory function, update with better error handling
 const handleAddCategory = async () => {
-  if (!newCategory.name.trim()) {
+  // Trim all inputs
+  const trimmedName = newCategory.name?.trim() || '';
+  const trimmedDescription = newCategory.description?.trim() || '';
+  const trimmedImage = newCategory.image?.trim() || '';
+  
+  if (!trimmedName) {
     toast.error('Category name is required');
     return;
   }
   
+  if (trimmedName.length < 2) {
+    toast.error('Category name must be at least 2 characters');
+    return;
+  }
+  
   try {
-    console.log('🔄 Creating category...', newCategory);
+    console.log('🔄 Creating category...', {
+      name: trimmedName,
+      description: trimmedDescription,
+      image: trimmedImage,
+      isActive: newCategory.isActive
+    });
     
-    // Ensure required fields are present
     const categoryData = {
-      name: newCategory.name.trim(),
-      description: newCategory.description?.trim() || '',
-      image: newCategory.image?.trim() || '',
+      name: trimmedName,
+      description: trimmedDescription,
+      image: trimmedImage,
       isActive: newCategory.isActive,
-      // Add optional fields with defaults
       parentCategory: null,
       order: 0
     };
@@ -102,9 +116,14 @@ const handleAddCategory = async () => {
     console.log('✅ Category created successfully:', result);
     
     toast.success('Category created successfully');
+    
+    // Reset form and close modal
     setNewCategory({ name: '', description: '', isActive: true, image: '' });
     setShowAddModal(false);
-    fetchCategories(); // Refresh the list
+    
+    // Refresh the list
+    fetchCategories();
+    
   } catch (error) {
     console.error('❌ Error creating category:', error);
     console.error('Error details:', error.response?.data);
@@ -119,10 +138,19 @@ const handleAddCategory = async () => {
   }
 };
 
-// Also update the handleEditCategory function
+// In the handleEditCategory function, add similar validation
 const handleEditCategory = async () => {
-  if (!editingCategory || !editingCategory.name.trim()) {
+  if (!editingCategory || !editingCategory.name?.trim()) {
     toast.error('Category name is required');
+    return;
+  }
+  
+  const trimmedName = editingCategory.name.trim();
+  const trimmedDescription = editingCategory.description?.trim() || '';
+  const trimmedImage = editingCategory.image?.trim() || '';
+  
+  if (trimmedName.length < 2) {
+    toast.error('Category name must be at least 2 characters');
     return;
   }
   
@@ -130,9 +158,9 @@ const handleEditCategory = async () => {
     console.log('🔄 Updating category...', editingCategory);
     
     const categoryData = {
-      name: editingCategory.name.trim(),
-      description: editingCategory.description?.trim() || '',
-      image: editingCategory.image?.trim() || '',
+      name: trimmedName,
+      description: trimmedDescription,
+      image: trimmedImage,
       isActive: editingCategory.isActive,
       parentCategory: editingCategory.parentCategory || null,
       order: editingCategory.order || 0
@@ -144,6 +172,7 @@ const handleEditCategory = async () => {
     toast.success('Category updated successfully');
     setEditingCategory(null);
     fetchCategories();
+    
   } catch (error) {
     console.error('❌ Error updating category:', error);
     console.error('Error details:', error.response?.data);
