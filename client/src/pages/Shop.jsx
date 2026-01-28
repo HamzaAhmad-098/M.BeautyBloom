@@ -3,7 +3,7 @@ import { useSearchParams, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import ProductCard from '../components/product/ProductCard';
 import ProductFilter from '../components/product/ProductFilter';
-import { FaFilter, FaTimes, FaSearch } from 'react-icons/fa';
+import { FaFilter, FaTimes, FaSearch, FaSpinner } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 
 const Shop = () => {
@@ -24,6 +24,15 @@ const Shop = () => {
     sort: 'newest',
     search: '',
   });
+
+  // Listen for mobile filter close event
+  useEffect(() => {
+    const handleCloseFilters = () => {
+      setShowFilters(false);
+    };
+    window.addEventListener('closeFilters', handleCloseFilters);
+    return () => window.removeEventListener('closeFilters', handleCloseFilters);
+  }, []);
 
   useEffect(() => {
     // Extract filters from URL
@@ -49,103 +58,71 @@ const Shop = () => {
   }, [location.search, searchParams]);
 
   useEffect(() => {
-    const fetchProducts = async () => {
-      setLoading(true);
-      try {
-        console.log('Fetching products with filters:', filters);
-        
-        const params = new URLSearchParams();
-        
-        if (filters.category) params.append('category', filters.category);
-        if (filters.search) params.append('keyword', filters.search);
-        if (filters.brand.length > 0) params.append('brand', filters.brand.join(','));
-        if (filters.minPrice) params.append('minPrice', filters.minPrice);
-        if (filters.maxPrice) params.append('maxPrice', filters.maxPrice);
-        if (filters.rating) params.append('rating', filters.rating);
-        if (filters.sort) params.append('sort', filters.sort);
-        params.append('pageNumber', currentPage);
-        params.append('pageSize', 12);
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      console.log('Fetching products with filters:', filters);
+      
+      const params = new URLSearchParams();
+      
+      // Add all filters to params (use correct parameter names)
+      if (filters.category) params.append('category', filters.category);
+      if (filters.search) params.append('keyword', filters.search);
+      if (filters.brand.length > 0) params.append('brand', filters.brand.join(','));
+      if (filters.minPrice) params.append('minPrice', filters.minPrice);
+      if (filters.maxPrice) params.append('maxPrice', filters.maxPrice);
+      if (filters.rating) params.append('rating', filters.rating);
+      if (filters.sort) params.append('sort', filters.sort);
+      params.append('pageNumber', currentPage);
+      // Note: Backend uses fixed pageSize of 12, so we don't need to send it
+      
+      console.log('Request params:', params.toString());
+      
+      const API_URL = import.meta.env.VITE_API_URL || 
+        (window.location.origin.includes('mbeautybloom.shop')
+          ? '/api' 
+          : 'http://localhost:5000/api');
+      
+      const response = await axios.get(`${API_URL}/products?${params}`);
+      
+      console.log('Products response:', {
+        data: response.data,
+        productsCount: response.data.products?.length || 0,
+        totalPages: response.data.pages
+      });
+      
+      // Handle response
+      const productsData = response.data.products || [];
+      setProducts(productsData);
+      setTotalPages(response.data.pages || 1);
+      
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      console.error('Error details:', error.response?.data || error.message);
+      toast.error('Failed to load products');
+      setProducts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        // Use the correct API URL
-        const API_URL = import.meta.env.VITE_API_URL || 
-          (window.location.origin === 'https://ingenious-laughter-production.up.railway.app' 
-            ? '/api' 
-            : 'http://localhost:5000/api');
-        
-        const response = await axios.get(`${API_URL}/products?${params}`);
-        
-        console.log('Products response:', response.data);
-        
-        // Handle different response structures
-        const productsData = response.data.products || response.data || [];
-        
-        // Process products to ensure proper image URLs AND stock data
-        const processedProducts = Array.isArray(productsData) 
-          ? productsData.map(product => {
-              // Create a copy of the product
-              const processedProduct = { ...product };
-              
-              // CRITICAL FIX: Handle stock field properly
-              // Backends often use countInStock, frontend uses stock
-              if (product.countInStock !== undefined) {
-                processedProduct.stock = product.countInStock;
-              } else if (product.stock !== undefined) {
-                processedProduct.stock = product.stock;
-              } else {
-                processedProduct.stock = 0; // Default if no stock info
-              }
-              
-              // Also set countInStock for consistency
-              processedProduct.countInStock = processedProduct.stock;
-              
-              // Process images array for Cloudinary
-              if (product.images && product.images.length > 0) {
-                // Map through images to ensure proper format
-                processedProduct.images = product.images.map(img => {
-                  // If image is a string URL, convert to object
-                  if (typeof img === 'string') {
-                    return {
-                      url: img,
-                      public_id: extractPublicIdFromCloudinaryUrl(img),
-                      alt: product.name || 'Product image'
-                    };
-                  }
-                  
-                  // If image has Cloudinary public_id but no URL, construct URL
-                  if (img.public_id && (!img.url || !img.url.includes('cloudinary.com'))) {
-                    const cloudName = 'dr1rajqzy'; // Your Cloudinary cloud name
-                    img.url = `https://res.cloudinary.com/${cloudName}/image/upload/w_800,h_600,c_fill,q_auto,f_auto/${img.public_id}`;
-                  }
-                  
-                  return img;
-                });
-              }
-              
-              console.log('Processed product stock:', {
-                original: product.stock,
-                countInStock: product.countInStock,
-                final: processedProduct.stock
-              });
-              
-              return processedProduct;
-            })
-          : [];
-        
-        setProducts(processedProducts);
-        setTotalPages(response.data.pages || 1);
-        
-      } catch (error) {
-        console.error('Error fetching products:', error);
-        toast.error('Failed to load products');
-        setProducts([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+  fetchProducts();
+}, [filters, currentPage]);
 
-    fetchProducts();
-  }, [filters, currentPage]);
-
+const fetchBrands = async () => {
+  try {
+    const API_URL = import.meta.env.VITE_API_URL || 
+      (window.location.origin.includes('mbeautybloom.shop')
+        ? '/api' 
+        : 'http://localhost:5000/api');
+    
+    const response = await axios.get(`${API_URL}/products/brands`);
+    return response.data; // Should return an array of brand names
+  } catch (error) {
+    console.error('Error fetching brands:', error);
+    return [];
+  }
+};
   // Helper function to extract public_id from Cloudinary URL
   const extractPublicIdFromCloudinaryUrl = (url) => {
     if (!url || !url.includes('cloudinary.com')) return null;
@@ -210,6 +187,13 @@ const Shop = () => {
     setCurrentPage(1);
   };
 
+  // Count active filters
+  const activeFiltersCount = Object.entries(filters).filter(([key, value]) => {
+    if (key === 'sort') return false; // Don't count sort
+    if (Array.isArray(value)) return value.length > 0;
+    return value !== '';
+  }).length;
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-6 px-4 animate-fade-in">
       <div className="max-w-7xl mx-auto">
@@ -232,9 +216,11 @@ const Shop = () => {
             >
               {showFilters ? <FaTimes /> : <FaFilter />}
               <span>{showFilters ? 'Hide Filters' : 'Show Filters'}</span>
-              <span className="ml-auto text-xs bg-primary-100 text-primary-600 px-2 py-1 rounded-full">
-                {Object.values(filters).filter(v => v && (Array.isArray(v) ? v.length > 0 : v !== '')).length}
-              </span>
+              {activeFiltersCount > 0 && (
+                <span className="ml-auto text-xs bg-primary-100 text-primary-600 px-2 py-1 rounded-full font-semibold">
+                  {activeFiltersCount}
+                </span>
+              )}
             </button>
           </div>
 
@@ -268,7 +254,7 @@ const Shop = () => {
             {/* Sort Bar */}
             <div className="bg-white rounded-lg shadow p-4 mb-6">
               <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 w-full sm:w-auto">
                   <FaSearch className="text-gray-400" />
                   <input
                     type="text"
@@ -278,7 +264,7 @@ const Shop = () => {
                     className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 w-full sm:w-64"
                   />
                 </div>
-                <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-4 w-full sm:w-auto">
                   <span className="text-gray-600 hidden sm:block">Sort by:</span>
                   <select
                     value={filters.sort}
@@ -293,6 +279,65 @@ const Shop = () => {
                   </select>
                 </div>
               </div>
+              
+              {/* Active Filters Display */}
+              {activeFiltersCount > 0 && (
+                <div className="mt-4 pt-4 border-t flex flex-wrap gap-2 items-center">
+                  <span className="text-sm text-gray-600">Active filters:</span>
+                  {filters.category && (
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
+                      {filters.category}
+                      <button
+                        onClick={() => handleFilterChange({ category: '' })}
+                        className="ml-2 hover:text-primary-900"
+                      >
+                        <FaTimes className="text-xs" />
+                      </button>
+                    </span>
+                  )}
+                  {filters.brand.map(brand => (
+                    <span key={brand} className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                      {brand}
+                      <button
+                        onClick={() => handleFilterChange({ brand: filters.brand.filter(b => b !== brand) })}
+                        className="ml-2 hover:text-purple-900"
+                      >
+                        <FaTimes className="text-xs" />
+                      </button>
+                    </span>
+                  ))}
+                  {(filters.minPrice || filters.maxPrice) && (
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      {filters.minPrice && `Rs. ${filters.minPrice}`}
+                      {filters.minPrice && filters.maxPrice && ' - '}
+                      {filters.maxPrice && `Rs. ${filters.maxPrice}`}
+                      <button
+                        onClick={() => handleFilterChange({ minPrice: '', maxPrice: '' })}
+                        className="ml-2 hover:text-green-900"
+                      >
+                        <FaTimes className="text-xs" />
+                      </button>
+                    </span>
+                  )}
+                  {filters.rating && (
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                      {filters.rating}★ & above
+                      <button
+                        onClick={() => handleFilterChange({ rating: '' })}
+                        className="ml-2 hover:text-yellow-900"
+                      >
+                        <FaTimes className="text-xs" />
+                      </button>
+                    </span>
+                  )}
+                  <button
+                    onClick={clearFilters}
+                    className="text-xs text-gray-600 hover:text-gray-900 underline"
+                  >
+                    Clear all
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Products Grid */}

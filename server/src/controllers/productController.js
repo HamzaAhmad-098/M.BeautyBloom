@@ -100,21 +100,83 @@ const deleteProductReview = asyncHandler(async (req, res) => {
 const getProducts = asyncHandler(async (req, res) => {
   const pageSize = 12;
   const page = Number(req.query.pageNumber) || 1;
+  
+  // Extract all filter parameters
   const keyword = req.query.keyword
     ? {
         name: { $regex: req.query.keyword, $options: 'i' },
       }
     : {};
+  
+  const category = req.query.category;
+  const brand = req.query.brand; // comma-separated string
+  const minPrice = req.query.minPrice;
+  const maxPrice = req.query.maxPrice;
+  const rating = req.query.rating;
+  const sort = req.query.sort || 'newest';
 
-  const count = await Product.countDocuments({ ...keyword });
-  const products = await Product.find({ ...keyword })
+  // Build query object
+  let query = { ...keyword };
+
+  // Add category filter
+  if (category && category.trim() !== '') {
+    query.category = { $regex: category, $options: 'i' };
+  }
+
+  // Add brand filter (can be multiple brands)
+  if (brand && brand.trim() !== '') {
+    const brandsArray = brand.split(',');
+    query.brand = { $in: brandsArray.map(b => new RegExp(b.trim(), 'i')) };
+  }
+
+  // Add price range filter
+  if (minPrice || maxPrice) {
+    query.price = {};
+    if (minPrice && !isNaN(minPrice)) {
+      query.price.$gte = Number(minPrice);
+    }
+    if (maxPrice && !isNaN(maxPrice)) {
+      query.price.$lte = Number(maxPrice);
+    }
+  }
+
+  // Add rating filter
+  if (rating && !isNaN(rating)) {
+    query.rating = { $gte: Number(rating) };
+  }
+
+  // Sort options
+  let sortOption = {};
+  switch (sort) {
+    case 'price-low':
+      sortOption = { price: 1 };
+      break;
+    case 'price-high':
+      sortOption = { price: -1 };
+      break;
+    case 'rating':
+      sortOption = { rating: -1 };
+      break;
+    case 'popular':
+      sortOption = { numReviews: -1 };
+      break;
+    case 'newest':
+    default:
+      sortOption = { createdAt: -1 };
+      break;
+  }
+
+  console.log('Query:', JSON.stringify(query, null, 2));
+  console.log('Sort:', sortOption);
+
+  const count = await Product.countDocuments(query);
+  const products = await Product.find(query)
     .limit(pageSize)
     .skip(pageSize * (page - 1))
-    .sort({ createdAt: -1 });
+    .sort(sortOption);
 
   res.json({ products, page, pages: Math.ceil(count / pageSize) });
 });
-
 // @desc    Get product by ID
 // @route   GET /api/products/:id
 // @access  Public
