@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { removeItem, updateQuantity, clearCart } from '../store/slices/cartSlice.js';
-import { FaTrash, FaPlus, FaMinus, FaShoppingBag, FaArrowLeft } from 'react-icons/fa';
+import { FaTrash, FaPlus, FaMinus, FaShoppingBag, FaArrowLeft, FaExclamationTriangle } from 'react-icons/fa';
 import { useState } from 'react';
+import { toast } from 'react-hot-toast';
 
 const Cart = () => {
   const { cartItems, cartTotal, itemsCount } = useSelector((state) => state.cart);
@@ -88,11 +89,32 @@ const Cart = () => {
     return 'https://via.placeholder.com/150';
   };
 
-  const handleQuantityChange = async (itemId, newQuantity) => {
+  // Get available stock for an item
+  const getAvailableStock = (item) => {
+    // Check both stock and countInStock fields (as per Product model)
+    const productStock = item.product?.stock || item.product?.countInStock || 0;
+    const itemStock = item.stock || item.countInStock || 0;
+    return Math.max(productStock, itemStock);
+  };
+
+  // Check if item is in stock
+  const isInStock = (item) => {
+    return getAvailableStock(item) > 0;
+  };
+
+  const handleQuantityChange = async (item, newQuantity) => {
     if (newQuantity < 1) return;
     
-    setUpdatingId(itemId);
-    dispatch(updateQuantity({ itemId, quantity: newQuantity }));
+    const availableStock = getAvailableStock(item);
+    
+    // Check stock availability
+    if (newQuantity > availableStock) {
+      toast.error(`Only ${availableStock} items available in stock`);
+      return;
+    }
+    
+    setUpdatingId(item._id);
+    dispatch(updateQuantity({ itemId: item._id, quantity: newQuantity }));
     
     setTimeout(() => setUpdatingId(null), 300);
   };
@@ -108,6 +130,9 @@ const Cart = () => {
       dispatch(clearCart());
     }
   };
+
+  // Check if there are any out of stock items
+  const hasOutOfStockItems = cartItems.some(item => !isInStock(item));
 
   if (!cartItems || cartItems.length === 0) {
     return (
@@ -149,92 +174,141 @@ const Cart = () => {
           Shopping Cart ({itemsCount} {itemsCount === 1 ? 'item' : 'items'})
         </h1>
 
+        {/* Out of Stock Warning */}
+        {hasOutOfStockItems && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start">
+            <FaExclamationTriangle className="text-red-500 mt-0.5 mr-3 flex-shrink-0" />
+            <div>
+              <h3 className="font-semibold text-red-800 mb-1">Some items are out of stock</h3>
+              <p className="text-sm text-red-700">
+                Please remove out of stock items before proceeding to checkout.
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Cart Items */}
           <div className="lg:col-span-2 space-y-4">
-            {cartItems.map((item) => (
-              <div
-                key={item._id || `${item.productId}-${Date.now()}`}
-                className="bg-white rounded-xl shadow-sm p-4 hover:shadow-md transition-all duration-300 animate-slide-in"
-              >
-                <div className="flex items-start space-x-4">
-                  {/* Product Image */}
-                  <Link 
-                    to={`/product/${item.productId || item.product?._id}`} 
-                    className="flex-shrink-0"
-                  >
-                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden bg-gray-100">
-                      <img
-                        src={getItemImageUrl(item)}
-                        alt={item.name || item.product?.name}
-                        className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
-                        onError={(e) => { 
-                          e.target.src = 'https://via.placeholder.com/150?text=No+Image';
-                          e.target.onerror = null;
-                        }}
-                      />
-                    </div>
-                  </Link>
-
-                  {/* Product Info */}
-                  <div className="flex-1 min-w-0">
-                    <Link to={`/product/${item.productId || item.product?._id}`}>
-                      <h3 className="font-semibold text-gray-800 hover:text-primary-600 text-sm sm:text-base line-clamp-2">
-                        {item.name || item.product?.name || 'Product'}
-                      </h3>
+            {cartItems.map((item) => {
+              const availableStock = getAvailableStock(item);
+              const itemInStock = isInStock(item);
+              
+              return (
+                <div
+                  key={item._id || `${item.productId}-${Date.now()}`}
+                  className={`bg-white rounded-xl shadow-sm p-4 transition-all duration-300 ${
+                    !itemInStock ? 'border-2 border-red-200 bg-red-50' : 'hover:shadow-md'
+                  } animate-slide-in`}
+                >
+                  <div className="flex items-start space-x-4">
+                    {/* Product Image */}
+                    <Link 
+                      to={`/product/${item.productId || item.product?._id}`} 
+                      className="flex-shrink-0 relative"
+                    >
+                      <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden bg-gray-100">
+                        <img
+                          src={getItemImageUrl(item)}
+                          alt={item.name || item.product?.name}
+                          className={`w-full h-full object-cover transition-transform duration-300 ${
+                            itemInStock ? 'hover:scale-110' : 'opacity-50'
+                          }`}
+                          onError={(e) => { 
+                            e.target.src = 'https://via.placeholder.com/150?text=No+Image';
+                            e.target.onerror = null;
+                          }}
+                        />
+                        {!itemInStock && (
+                          <div className="absolute inset-0 bg-red-500 bg-opacity-20 flex items-center justify-center">
+                            <span className="text-xs font-bold text-red-700 bg-white px-2 py-1 rounded">
+                              Out of Stock
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </Link>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {item.brand || item.product?.brand || 'Brand'}
-                    </p>
-                    <div className="mt-2">
-                      <span className="font-bold text-gray-900">
-                        Rs. {(
-                          (item.price || 
-                           (item.product?.discountPrice > 0 
-                            ? item.product?.discountPrice 
-                            : item.product?.price) || 0) * (item.quantity || 1)
-                        ).toLocaleString()}
-                      </span>
-                      {item.product?.discountPrice > 0 && item.product?.price && (
-                        <span className="text-xs text-gray-500 line-through ml-2">
-                          Rs. {(item.product?.price * (item.quantity || 1)).toLocaleString()}
-                        </span>
-                      )}
-                    </div>
 
-                    {/* Quantity Controls */}
-                    <div className="mt-3 flex items-center space-x-3">
-                      <div className="flex items-center border border-gray-300 rounded-lg">
-                        <button
-                          onClick={() => handleQuantityChange(item._id, (item.quantity || 1) - 1)}
-                          disabled={item.quantity <= 1 || updatingId === item._id}
-                          className="p-2 hover:bg-gray-100 disabled:opacity-50 mobile-tap-target"
-                        >
-                          <FaMinus className="text-gray-600 text-xs" />
-                        </button>
-                        <span className="w-12 text-center font-medium">
-                          {updatingId === item._id ? '...' : item.quantity || 1}
+                    {/* Product Info */}
+                    <div className="flex-1 min-w-0">
+                      <Link to={`/product/${item.productId || item.product?._id}`}>
+                        <h3 className="font-semibold text-gray-800 hover:text-primary-600 text-sm sm:text-base line-clamp-2">
+                          {item.name || item.product?.name || 'Product'}
+                        </h3>
+                      </Link>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {item.brand || item.product?.brand || 'Brand'}
+                      </p>
+
+                      {/* Stock Status */}
+                      {itemInStock ? (
+                        <p className="text-xs text-green-600 mt-1 font-medium">
+                          {availableStock > 10 
+                            ? 'In Stock' 
+                            : `Only ${availableStock} left in stock`}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-red-600 mt-1 font-bold">
+                          Out of Stock
+                        </p>
+                      )}
+
+                      <div className="mt-2">
+                        <span className="font-bold text-gray-900">
+                          Rs. {(
+                            (item.price || 
+                             (item.product?.discountPrice > 0 
+                              ? item.product?.discountPrice 
+                              : item.product?.price) || 0) * (item.quantity || 1)
+                          ).toLocaleString()}
                         </span>
+                        {item.product?.discountPrice > 0 && item.product?.price && (
+                          <span className="text-xs text-gray-500 line-through ml-2">
+                            Rs. {(item.product?.price * (item.quantity || 1)).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Quantity Controls */}
+                      <div className="mt-3 flex items-center space-x-3">
+                        {itemInStock ? (
+                          <div className="flex items-center border border-gray-300 rounded-lg">
+                            <button
+                              onClick={() => handleQuantityChange(item, (item.quantity || 1) - 1)}
+                              disabled={item.quantity <= 1 || updatingId === item._id}
+                              className="p-2 hover:bg-gray-100 disabled:opacity-50 mobile-tap-target"
+                            >
+                              <FaMinus className="text-gray-600 text-xs" />
+                            </button>
+                            <span className="w-12 text-center font-medium">
+                              {updatingId === item._id ? '...' : item.quantity || 1}
+                            </span>
+                            <button
+                              onClick={() => handleQuantityChange(item, (item.quantity || 1) + 1)}
+                              disabled={updatingId === item._id || item.quantity >= availableStock}
+                              className="p-2 hover:bg-gray-100 disabled:opacity-50 mobile-tap-target"
+                            >
+                              <FaPlus className="text-gray-600 text-xs" />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-red-600 font-medium">
+                            Not available
+                          </span>
+                        )}
                         <button
-                          onClick={() => handleQuantityChange(item._id, (item.quantity || 1) + 1)}
-                          disabled={updatingId === item._id}
-                          className="p-2 hover:bg-gray-100 disabled:opacity-50 mobile-tap-target"
+                          onClick={() => handleRemoveItem(item._id)}
+                          className="text-red-500 hover:text-red-700 text-sm font-medium flex items-center mobile-tap-target"
                         >
-                          <FaPlus className="text-gray-600 text-xs" />
+                          <FaTrash className="mr-1 text-xs" />
+                          Remove
                         </button>
                       </div>
-                      <button
-                        onClick={() => handleRemoveItem(item._id)}
-                        className="text-red-500 hover:text-red-700 text-sm font-medium flex items-center mobile-tap-target"
-                      >
-                        <FaTrash className="mr-1 text-xs" />
-                        Remove
-                      </button>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {/* Cart Actions */}
             <div className="bg-white rounded-xl shadow-sm p-4">
@@ -296,12 +370,21 @@ const Cart = () => {
                 </p>
               </div>
               <div className="mt-6 space-y-3">
-                <Link
-                  to="/checkout"
-                  className="block w-full bg-gradient-to-r from-primary-500 to-primary-600 hover:opacity-90 text-white text-center py-3 rounded-lg font-semibold transition-all duration-300 transform hover:scale-105 mobile-tap-target"
-                >
-                  Proceed to Checkout
-                </Link>
+                {hasOutOfStockItems ? (
+                  <button
+                    disabled
+                    className="w-full bg-gray-300 text-gray-500 cursor-not-allowed py-3 rounded-lg font-semibold mobile-tap-target"
+                  >
+                    Remove Out of Stock Items
+                  </button>
+                ) : (
+                  <Link
+                    to="/checkout"
+                    className="block w-full bg-gradient-to-r from-primary-500 to-primary-600 hover:opacity-90 text-white text-center py-3 rounded-lg font-semibold transition-all duration-300 transform hover:scale-105 mobile-tap-target"
+                  >
+                    Proceed to Checkout
+                  </Link>
+                )}
                 
                 <div className="flex items-center justify-center space-x-4 text-sm text-gray-600 mt-4">
                   <span className="px-2 py-1 bg-gray-100 rounded">COD</span>
