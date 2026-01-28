@@ -2,6 +2,98 @@ import asyncHandler from 'express-async-handler';
 import Product from '../models/Product.js';
 import { deleteFromCloudinary } from '../config/cloudinary.js';
 
+
+// ... existing imports ...
+
+// @desc    Update a review
+// @route   PUT /api/products/:id/reviews/:reviewId
+// @access  Private
+const updateProductReview = asyncHandler(async (req, res) => {
+  const { rating, comment } = req.body;
+  const product = await Product.findById(req.params.id);
+
+  if (!product) {
+    res.status(404);
+    throw new Error('Product not found');
+  }
+
+  const review = product.reviews.id(req.params.reviewId);
+
+  if (!review) {
+    res.status(404);
+    throw new Error('Review not found');
+  }
+
+  // Check if user owns the review or is admin
+  if (review.user.toString() !== req.user._id.toString() && !req.user.isAdmin) {
+    res.status(401);
+    throw new Error('Not authorized to update this review');
+  }
+
+  review.rating = rating;
+  review.comment = comment;
+  review.updatedAt = Date.now();
+
+  // Recalculate product rating
+  product.rating = product.reviews.reduce((acc, item) => item.rating + acc, 0) / product.reviews.length;
+  product.numReviews = product.reviews.length;
+
+  await product.save();
+  
+  res.json({ 
+    message: 'Review updated successfully',
+    review,
+    productRating: product.rating,
+    numReviews: product.numReviews
+  });
+});
+
+// @desc    Delete a review
+// @route   DELETE /api/products/:id/reviews/:reviewId
+// @access  Private
+const deleteProductReview = asyncHandler(async (req, res) => {
+  const product = await Product.findById(req.params.id);
+
+  if (!product) {
+    res.status(404);
+    throw new Error('Product not found');
+  }
+
+  const review = product.reviews.id(req.params.reviewId);
+
+  if (!review) {
+    res.status(404);
+    throw new Error('Review not found');
+  }
+
+  // Check if user owns the review or is admin
+  if (review.user.toString() !== req.user._id.toString() && !req.user.isAdmin) {
+    res.status(401);
+    throw new Error('Not authorized to delete this review');
+  }
+
+  // Remove the review
+  product.reviews.pull({ _id: req.params.reviewId });
+
+  // Recalculate product rating
+  if (product.reviews.length > 0) {
+    product.rating = product.reviews.reduce((acc, item) => item.rating + acc, 0) / product.reviews.length;
+  } else {
+    product.rating = 0;
+  }
+  
+  product.numReviews = product.reviews.length;
+
+  await product.save();
+  
+  res.json({ 
+    message: 'Review deleted successfully',
+    productRating: product.rating,
+    numReviews: product.numReviews
+  });
+});
+
+
 // @desc    Get products (paginated & filterable)
 // @route   GET /api/products
 // @access  Public
@@ -306,36 +398,6 @@ const createProductReview = asyncHandler(async (req, res) => {
     throw new Error('Product not found');
   }
 });
-
-// @desc    Delete a review (Admin)
-// @route   DELETE /api/products/:id/reviews/:reviewId
-// @access  Private/Admin
-const deleteProductReview = asyncHandler(async (req, res) => {
-  const { id, reviewId } = req.params;
-  const product = await Product.findById(id);
-
-  if (!product) {
-    res.status(404);
-    throw new Error('Product not found');
-  }
-
-  const initialLen = product.reviews.length;
-  product.reviews = product.reviews.filter((r) => r._id.toString() !== reviewId.toString());
-
-  if (product.reviews.length === initialLen) {
-    res.status(404);
-    throw new Error('Review not found');
-  }
-
-  product.numReviews = product.reviews.length;
-  product.rating = product.reviews.length
-    ? product.reviews.reduce((acc, item) => item.rating + acc, 0) / product.reviews.length
-    : 0;
-
-  await product.save();
-  res.json({ message: 'Review removed' });
-});
-
 // @desc    Get top rated products
 // @route   GET /api/products/top
 // @access  Public
@@ -395,6 +457,7 @@ const getCategories = asyncHandler(async (req, res) => {
   res.json(categories);
 });
 
+// ... existing exports, add the new functions ...
 export {
   getProducts,
   getProductById,
@@ -402,7 +465,8 @@ export {
   updateProduct,
   deleteProduct,
   createProductReview,
-  deleteProductReview,
+  updateProductReview,  // Add this
+  deleteProductReview,  // And this
   getTopProducts,
   getFeaturedProducts,
   getNewProducts,

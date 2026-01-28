@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { addToCart } from '../store/slices/cartSlice';
-import { fetchProductById } from '../store/slices/productSlice.js';
-import { FaStar, FaShippingFast, FaShieldAlt, FaUndo, FaHeart, FaShareAlt, FaMinus, FaPlus, FaCheck } from 'react-icons/fa';
+import { FaStar, FaShippingFast, FaShieldAlt, FaUndo, FaHeart, FaShareAlt, FaMinus, FaPlus, FaCheck, FaUser, FaEdit, FaTrash } from 'react-icons/fa';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 
@@ -11,6 +10,8 @@ const ProductDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  
+  const { userInfo } = useSelector((state) => state.auth);
   
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -20,6 +21,14 @@ const ProductDetails = () => {
   const [reviews, setReviews] = useState([]);
   const [activeTab, setActiveTab] = useState('description');
   const [isWishlisted, setIsWishlisted] = useState(false);
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [reviewForm, setReviewForm] = useState({
+    rating: 5,
+    comment: '',
+  });
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [userHasReviewed, setUserHasReviewed] = useState(false);
+  const [editingReview, setEditingReview] = useState(null);
 
   // Helper function to construct Cloudinary image URL
   const constructImageUrl = (imageData) => {
@@ -27,30 +36,24 @@ const ProductDetails = () => {
       return 'https://via.placeholder.com/600';
     }
 
-    // If it's a string, check if it's already a full URL
     if (typeof imageData === 'string') {
       if (imageData.includes('http')) {
         return imageData;
       }
-      // If it looks like a public_id, construct Cloudinary URL
       const cloudName = 'dr1rajqzy';
       const publicId = imageData.startsWith('/') ? imageData.substring(1) : imageData;
       return `https://res.cloudinary.com/${cloudName}/image/upload/w_800,h_600,c_fill,q_auto,f_auto/${publicId}`;
     }
 
-    // If it's an object with url property
     if (imageData.url) {
-      // If it's already a full Cloudinary URL, return it
       if (imageData.url.includes('cloudinary.com')) {
         return imageData.url;
       }
-      // If it's any other URL
       if (imageData.url.includes('http')) {
         return imageData.url;
       }
     }
 
-    // If we have a public_id but no URL, construct Cloudinary URL
     if (imageData.public_id) {
       const cloudName = 'dr1rajqzy';
       const publicId = imageData.public_id.startsWith('/') 
@@ -59,52 +62,52 @@ const ProductDetails = () => {
       return `https://res.cloudinary.com/${cloudName}/image/upload/w_800,h_600,c_fill,q_auto,f_auto/${publicId}`;
     }
 
-    // Fallback
     return 'https://via.placeholder.com/600';
   };
 
-useEffect(() => {
-  const fetchProduct = async () => {
-    try {
-      setLoading(true);
-      const response = await axios.get(`/api/products/${id}`);
-      const productData = response.data;
-      
-      // CRITICAL FIX: Handle stock field properly
-      // Backends often use countInStock, frontend uses stock
-      if (productData.countInStock !== undefined) {
-        productData.stock = productData.countInStock;
-      } else if (productData.stock !== undefined) {
-        productData.stock = productData.stock;
-      } else {
-        productData.stock = 0; // Default if no stock info
+  useEffect(() => {
+    const fetchProduct = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(`/api/products/${id}`);
+        const productData = response.data;
+        
+        // Handle stock field properly
+        if (productData.countInStock !== undefined) {
+          productData.stock = productData.countInStock;
+        } else if (productData.stock !== undefined) {
+          productData.stock = productData.stock;
+        } else {
+          productData.stock = 0;
+        }
+        
+        productData.countInStock = productData.stock;
+        
+        setProduct(productData);
+        setReviews(productData.reviews || []);
+        
+        // Check if user has already reviewed this product
+        if (userInfo) {
+          const hasReviewed = productData.reviews?.some(
+            review => review.user === userInfo._id || review.user?._id === userInfo._id
+          );
+          setUserHasReviewed(hasReviewed);
+        }
+        
+        if (productData.variants && productData.variants.length > 0) {
+          setSelectedVariant(productData.variants[0].name);
+        }
+      } catch (error) {
+        console.error('Error fetching product details:', error);
+        toast.error('Product not found');
+        navigate('/shop');
+      } finally {
+        setLoading(false);
       }
-      
-      // Also set countInStock for consistency
-      productData.countInStock = productData.stock;
-      
-      console.log('Product details stock:', {
-        originalStock: response.data.stock,
-        originalCountInStock: response.data.countInStock,
-        finalStock: productData.stock
-      });
-      
-      setProduct(productData);
-      setReviews(productData.reviews || []);
-      if (productData.variants && productData.variants.length > 0) {
-        setSelectedVariant(productData.variants[0].name);
-      }
-    } catch (error) {
-      console.error('Error fetching product details:', error);
-      toast.error('Product not found');
-      navigate('/shop');
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
-  fetchProduct();
-}, [id, navigate]);
+    fetchProduct();
+  }, [id, navigate, userInfo]);
 
   const handleAddToCart = () => {
     if (product.stock < quantity) {
@@ -148,6 +151,134 @@ useEffect(() => {
       navigator.clipboard.writeText(window.location.href);
       toast.success('Link copied to clipboard!');
     }
+  };
+
+  // Handle review form input changes
+  const handleReviewInputChange = (e) => {
+    const { name, value } = e.target;
+    setReviewForm({
+      ...reviewForm,
+      [name]: name === 'rating' ? parseInt(value) : value,
+    });
+  };
+
+  // Submit review
+  const handleSubmitReview = async () => {
+    if (!userInfo) {
+      toast.error('Please login to submit a review');
+      navigate('/login');
+      return;
+    }
+
+    if (!reviewForm.comment.trim()) {
+      toast.error('Please enter your review comment');
+      return;
+    }
+
+    setSubmittingReview(true);
+    try {
+      const token = localStorage.getItem('token');
+      let response;
+      
+      if (editingReview) {
+        // Update existing review
+        response = await axios.put(
+          `/api/products/${id}/reviews/${editingReview._id}`,
+          reviewForm,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        toast.success('Review updated successfully!');
+      } else {
+        // Create new review
+        response = await axios.post(
+          `/api/products/${id}/reviews`,
+          reviewForm,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        toast.success('Review submitted successfully!');
+      }
+      
+      // Refresh product data to get updated reviews
+      const productResponse = await axios.get(`/api/products/${id}`);
+      const updatedProduct = productResponse.data;
+      
+      // Update stock fields
+      if (updatedProduct.countInStock !== undefined) {
+        updatedProduct.stock = updatedProduct.countInStock;
+      }
+      updatedProduct.countInStock = updatedProduct.stock;
+      
+      setProduct(updatedProduct);
+      setReviews(updatedProduct.reviews || []);
+      setUserHasReviewed(true);
+      setShowReviewForm(false);
+      setEditingReview(null);
+      setReviewForm({ rating: 5, comment: '' });
+      
+    } catch (error) {
+      console.error('Error submitting review:', error);
+      toast.error(error.response?.data?.message || 'Failed to submit review');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  // Edit review
+  const handleEditReview = (review) => {
+    setEditingReview(review);
+    setReviewForm({
+      rating: review.rating,
+      comment: review.comment,
+    });
+    setShowReviewForm(true);
+  };
+
+  // Delete review
+  const handleDeleteReview = async (reviewId) => {
+    if (!window.confirm('Are you sure you want to delete this review?')) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`/api/products/${id}/reviews/${reviewId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      toast.success('Review deleted successfully!');
+      
+      // Refresh product data
+      const response = await axios.get(`/api/products/${id}`);
+      const updatedProduct = response.data;
+      
+      // Update stock fields
+      if (updatedProduct.countInStock !== undefined) {
+        updatedProduct.stock = updatedProduct.countInStock;
+      }
+      updatedProduct.countInStock = updatedProduct.stock;
+      
+      setProduct(updatedProduct);
+      setReviews(updatedProduct.reviews || []);
+      setUserHasReviewed(false);
+      
+    } catch (error) {
+      console.error('Error deleting review:', error);
+      toast.error(error.response?.data?.message || 'Failed to delete review');
+    }
+  };
+
+  // Check if user can edit/delete review
+  const canEditReview = (review) => {
+    if (!userInfo) return false;
+    return (
+      review.user === userInfo._id || 
+      review.user?._id === userInfo._id ||
+      userInfo.isAdmin
+    );
   };
 
   const features = [
@@ -426,9 +557,8 @@ useEffect(() => {
           </div>
         </div>
 
-        {/* Product Details Tabs */}
+        {/* Product Details Tabs - Updated to include comprehensive reviews */}
         <div className="bg-white rounded-xl shadow-lg mb-12">
-          {/* Tab Headers */}
           <div className="border-b">
             <div className="flex overflow-x-auto">
               {['description', 'ingredients', 'how-to-use', 'reviews', 'shipping'].map((tab) => (
@@ -447,7 +577,6 @@ useEffect(() => {
             </div>
           </div>
 
-          {/* Tab Content */}
           <div className="p-6">
             {activeTab === 'description' && (
               <div>
@@ -495,76 +624,212 @@ useEffect(() => {
             )}
 
             {activeTab === 'reviews' && (
-              <div>
-                <div className="flex justify-between items-center mb-6">
-                  <div>
-                    <h3 className="text-xl font-semibold">Customer Reviews</h3>
-                    <div className="flex items-center mt-2">
-                      <div className="flex items-center mr-4">
-                        <span className="text-3xl font-bold mr-2">{product.rating?.toFixed(1)}</span>
-                        <div className="flex">
-                          {[...Array(5)].map((_, i) => (
-                            <FaStar
-                              key={i}
-                              className={`text-lg ${
-                                i < Math.floor(product.rating || 0)
-                                  ? 'text-yellow-400'
-                                  : 'text-gray-300'
-                              }`}
-                            />
-                          ))}
+              <div className="space-y-8">
+                {/* Reviews Summary */}
+                <div className="bg-gray-50 p-6 rounded-lg">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                    <div>
+                      <h3 className="text-xl font-semibold mb-2">Customer Reviews</h3>
+                      <div className="flex items-center gap-4">
+                        <div className="text-center">
+                          <div className="text-4xl font-bold text-gray-900">{product.rating?.toFixed(1)}</div>
+                          <div className="flex items-center justify-center mt-1">
+                            {[...Array(5)].map((_, i) => (
+                              <FaStar
+                                key={i}
+                                className={`text-lg ${
+                                  i < Math.floor(product.rating || 0)
+                                    ? 'text-yellow-400 fill-yellow-400'
+                                    : 'text-gray-300 fill-gray-300'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <div className="text-gray-600">
+                          <div className="text-lg font-medium">{product.numReviews || 0} reviews</div>
+                          <div className="text-sm">Based on customer feedback</div>
                         </div>
                       </div>
-                      <span className="text-gray-600">
-                        {product.numReviews || 0} {product.numReviews === 1 ? 'review' : 'reviews'}
-                      </span>
                     </div>
+                    
+                    {/* Write Review Button */}
+                    {userInfo && !userHasReviewed && !showReviewForm && !editingReview && (
+                      <button
+                        onClick={() => setShowReviewForm(true)}
+                        className="bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                      >
+                        Write a Review
+                      </button>
+                    )}
                   </div>
-                  <button className="bg-primary-500 hover:bg-primary-600 text-white px-6 py-2 rounded-lg">
-                    Write a Review
-                  </button>
                 </div>
 
-                {reviews.length > 0 ? (
-                  <div className="space-y-6">
-                    {reviews.slice(0, 5).map((review, index) => (
-                      <div key={index} className="border-b pb-6 last:border-b-0">
-                        <div className="flex justify-between items-start mb-2">
-                          <div>
-                            <h4 className="font-semibold">{review.name}</h4>
-                            <div className="flex items-center mt-1">
-                              <div className="flex">
-                                {[...Array(5)].map((_, i) => (
-                                  <FaStar
-                                    key={i}
-                                    className={`text-sm ${
-                                      i < review.rating
-                                        ? 'text-yellow-400'
-                                        : 'text-gray-300'
-                                    }`}
-                                  />
-                                ))}
-                              </div>
-                              {review.verifiedPurchase && (
-                                <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                                  Verified Purchase
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <span className="text-sm text-gray-500">
-                            {new Date(review.createdAt).toLocaleDateString()}
+                {/* Review Form */}
+                {(showReviewForm || editingReview) && (
+                  <div className="bg-white border border-gray-200 rounded-lg p-6">
+                    <h4 className="text-lg font-semibold mb-4">
+                      {editingReview ? 'Edit Your Review' : 'Write Your Review'}
+                    </h4>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Rating
+                        </label>
+                        <div className="flex items-center space-x-2">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              type="button"
+                              onClick={() => setReviewForm({ ...reviewForm, rating: star })}
+                              className="text-2xl focus:outline-none"
+                            >
+                              <FaStar
+                                className={star <= reviewForm.rating ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}
+                              />
+                            </button>
+                          ))}
+                          <span className="ml-2 text-gray-600">
+                            {reviewForm.rating} out of 5
                           </span>
                         </div>
-                        <p className="text-gray-700">{review.comment}</p>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <p className="text-gray-600">No reviews yet. Be the first to review!</p>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Your Review
+                        </label>
+                        <textarea
+                          name="comment"
+                          value={reviewForm.comment}
+                          onChange={handleReviewInputChange}
+                          rows={4}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                          placeholder="Share your experience with this product..."
+                          required
+                        />
+                      </div>
+                      
+                      <div className="flex space-x-3">
+                        <button
+                          onClick={handleSubmitReview}
+                          disabled={submittingReview || !reviewForm.comment.trim()}
+                          className="bg-primary-500 hover:bg-primary-600 text-white px-6 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {submittingReview ? 'Submitting...' : editingReview ? 'Update Review' : 'Submit Review'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowReviewForm(false);
+                            setEditingReview(null);
+                            setReviewForm({ rating: 5, comment: '' });
+                          }}
+                          className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
+
+                {/* Reviews List */}
+                <div>
+                  <h4 className="text-lg font-semibold mb-4">
+                    All Reviews ({reviews.length})
+                  </h4>
+                  
+                  {reviews.length > 0 ? (
+                    <div className="space-y-6">
+                      {reviews.map((review, index) => (
+                        <div key={index} className="border-b border-gray-100 pb-6 last:border-b-0">
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+                                <FaUser className="text-primary-600" />
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-900">{review.name}</div>
+                                <div className="flex items-center mt-1">
+                                  <div className="flex">
+                                    {[...Array(5)].map((_, i) => (
+                                      <FaStar
+                                        key={i}
+                                        className={`text-sm ${
+                                          i < review.rating
+                                            ? 'text-yellow-400 fill-yellow-400'
+                                            : 'text-gray-300 fill-gray-300'
+                                        }`}
+                                      />
+                                    ))}
+                                  </div>
+                                  {review.verifiedPurchase && (
+                                    <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                                      Verified Purchase
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {new Date(review.createdAt).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                              })}
+                            </div>
+                          </div>
+                          
+                          <p className="text-gray-700 mb-3">{review.comment}</p>
+                          
+                          {/* Review Actions */}
+                          {canEditReview(review) && (
+                            <div className="flex space-x-3 mt-3">
+                              <button
+                                onClick={() => handleEditReview(review)}
+                                className="text-sm text-primary-600 hover:text-primary-700 flex items-center"
+                              >
+                                <FaEdit className="mr-1" /> Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteReview(review._id)}
+                                className="text-sm text-red-600 hover:text-red-700 flex items-center"
+                              >
+                                <FaTrash className="mr-1" /> Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <div className="text-gray-400 mb-4">
+                        <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                      </div>
+                      <h4 className="text-lg font-medium text-gray-700 mb-2">No reviews yet</h4>
+                      <p className="text-gray-600 mb-6">Be the first to share your thoughts about this product!</p>
+                      {userInfo && !userHasReviewed && (
+                        <button
+                          onClick={() => setShowReviewForm(true)}
+                          className="bg-primary-500 hover:bg-primary-600 text-white px-6 py-2 rounded-lg font-medium"
+                        >
+                          Write the First Review
+                        </button>
+                      )}
+                      {!userInfo && (
+                        <button
+                          onClick={() => navigate('/login')}
+                          className="bg-primary-500 hover:bg-primary-600 text-white px-6 py-2 rounded-lg font-medium"
+                        >
+                          Login to Write a Review
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -598,19 +863,8 @@ useEffect(() => {
           </div>
         </div>
 
-        {/* Related Products */}
-        <div className="mb-12">
-          <h2 className="text-2xl font-bold mb-6">You May Also Like</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="bg-white rounded-lg shadow p-4">
-                <div className="h-48 bg-gray-100 rounded-lg mb-4"></div>
-                <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* REMOVED Related Products Section */}
+        
       </div>
     </div>
   );
