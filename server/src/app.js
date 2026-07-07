@@ -44,9 +44,9 @@ app.use((req, res, next) => {
     return res.redirect(301, `https://www.mbeautybloom.shop${req.originalUrl}`);
   }
   
-  // Redirect non-www to www (optional but recommended)
-  if (host === 'mbeautybloom.shop') {
-    return res.redirect(301, `https://www.mbeautybloom.shop${req.originalUrl}`);
+  // Redirect www to root (matches Render's canonical domain)
+  if (host === 'www.mbeautybloom.shop') {
+    return res.redirect(301, `https://mbeautybloom.shop${req.originalUrl}`);
   }
   
   next();
@@ -64,8 +64,8 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
   ? [
       'https://www.mbeautybloom.shop',
       'https://mbeautybloom.shop',
-      'https://ingenious-laughter-production.up.railway.app',
       'https://m-beautybloom.onrender.com',
+      'https://ingenious-laughter-production.up.railway.app',
       'http://localhost:3000',
       'http://localhost:5173',
       'https://res.cloudinary.com'
@@ -90,9 +90,9 @@ app.use(cors({
       console.log('📋 Allowed origins:', allowedOrigins);
       
       // In production, be more strict but allow your Railway domain
-if (process.env.NODE_ENV === 'production' && (origin.includes('railway.app') || origin.includes('onrender.com'))) {
-  console.log(`⚠️  Allowing Render/Railway subdomain: ${origin}`);
-  callback(null, true);
+      if (process.env.NODE_ENV === 'production' && (origin.includes('railway.app') || origin.includes('onrender.com'))) {
+        console.log(`⚠️  Allowing Render/Railway subdomain: ${origin}`);
+        callback(null, true);
       } else {
         const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
         callback(new Error(msg), false);
