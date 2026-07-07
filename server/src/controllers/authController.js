@@ -49,7 +49,7 @@ const register = asyncHandler(async (req, res) => {
 
   // Generate verification token
   const verificationToken = user.createEmailVerificationToken();
-  await user.save();
+  await user.save({ validateBeforeSave: false });
 
   // Create verification URL
   const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${verificationToken}`;
@@ -89,7 +89,7 @@ const register = asyncHandler(async (req, res) => {
   } catch (error) {
     user.emailVerificationToken = undefined;
     user.emailVerificationExpire = undefined;
-    await user.save();
+    await user.save({ validateBeforeSave: false });
     
     res.status(500);
     throw new Error('Email could not be sent. Please try again later.');
@@ -97,7 +97,7 @@ const register = asyncHandler(async (req, res) => {
 });
 
 // @desc    Verify email
-// @route   GET /api/auth/verify-email/:token
+// @route   POST /api/auth/verify-email/:token
 // @access  Public
 const verifyEmail = asyncHandler(async (req, res) => {
   // Get token from params
@@ -122,9 +122,28 @@ const verifyEmail = asyncHandler(async (req, res) => {
   user.emailVerificationExpire = undefined;
   await user.save();
 
+  // Generate new token for immediate login
+  const token = generateToken(user._id);
+  
+  // Set cookie
+  setTokenCookie(res, token);
+
+  // Remove password from response
+  user.password = undefined;
+
   res.status(200).json({
     success: true,
-    message: 'Email verified successfully! You can now login.',
+    token,
+    user: {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      isVerified: user.isVerified,
+      isAdmin: user.isAdmin,
+      avatar: user.avatar,
+    },
+    message: 'Email verified successfully!',
   });
 });
 
@@ -153,7 +172,7 @@ const resendVerificationEmail = asyncHandler(async (req, res) => {
 
   // Generate new verification token
   const verificationToken = user.createEmailVerificationToken();
-  await user.save();
+  await user.save({ validateBeforeSave: false });
 
   // Create verification URL
   const verificationUrl = `${process.env.FRONTEND_URL}/verify-email/${verificationToken}`;
@@ -177,14 +196,14 @@ const resendVerificationEmail = asyncHandler(async (req, res) => {
   } catch (error) {
     user.emailVerificationToken = undefined;
     user.emailVerificationExpire = undefined;
-    await user.save();
+    await user.save({ validateBeforeSave: false });
     
     res.status(500);
     throw new Error('Email could not be sent. Please try again later.');
   }
 });
 
-// @desc    Login user
+// @desc    Login user - UPDATED VERIFICATION CHECK
 // @route   POST /api/auth/login
 // @access  Public
 const login = asyncHandler(async (req, res) => {
@@ -197,7 +216,7 @@ const login = asyncHandler(async (req, res) => {
   }
 
   // Check for user
-  const user = await User.findOne({  email: email.toLowerCase()  }).select('+password +loginAttempts +lockUntil');
+  const user = await User.findOne({ email: email.toLowerCase() }).select('+password +loginAttempts +lockUntil');
 
   if (!user) {
     res.status(401);
@@ -235,9 +254,31 @@ const login = asyncHandler(async (req, res) => {
     }
   }
 
+  // IMPORTANT: Check if email is verified
+  if (!user.isVerified) {
+    // Save user info without token (for verification page)
+    const tempUser = {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      isVerified: user.isVerified,
+      isAdmin: user.isAdmin,
+      avatar: user.avatar,
+    };
+    
+    res.status(403).json({
+      success: false,
+      user: tempUser,
+      message: 'Please verify your email before logging in.',
+      requiresVerification: true,
+    });
+    return;
+  }
+
   // Reset login attempts on successful login
   await user.resetLoginAttempts();
-console.log('User logging in:', user.email, 'isAdmin:', user.isAdmin);
+
   // Update last login
   await user.updateLastLogin();
 
@@ -402,7 +443,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
 
   // Get reset token
   const resetToken = user.createPasswordResetToken();
-  await user.save();
+  await user.save({ validateBeforeSave: false });
 
   // Create reset URL
   const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
@@ -426,7 +467,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
   } catch (error) {
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
-    await user.save();
+    await user.save({ validateBeforeSave: false });
 
     res.status(500);
     throw new Error('Email could not be sent. Please try again later.');
@@ -510,8 +551,7 @@ const deleteAccount = asyncHandler(async (req, res) => {
   });
 });
 
-
- const checkEmailAvailability = async (req, res) => {
+const checkEmailAvailability = async (req, res) => {
   const { email } = req.body;
 
   if (!email) {
@@ -524,7 +564,6 @@ const deleteAccount = asyncHandler(async (req, res) => {
     available: !user, 
   });
 };
-
 
 export {
   register,
@@ -540,4 +579,3 @@ export {
   deleteAccount,
   checkEmailAvailability,
 };
-

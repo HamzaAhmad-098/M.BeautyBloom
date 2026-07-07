@@ -10,13 +10,29 @@ const Layout = () => {
 
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      
+      // Update body classes for mobile detection
+      if (mobile) {
+        document.body.classList.add('is-mobile');
+        document.documentElement.style.overflowY = 'auto';
+        document.body.style.overflowY = 'auto';
+      } else {
+        document.body.classList.remove('is-mobile');
+      }
     };
     
     checkMobile();
     window.addEventListener('resize', checkMobile);
     
-    return () => window.removeEventListener('resize', checkMobile);
+    // Cleanup
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+      document.body.classList.remove('is-mobile');
+      document.documentElement.style.overflowY = '';
+      document.body.style.overflowY = '';
+    };
   }, []);
 
   return (
@@ -26,8 +42,11 @@ const Layout = () => {
       {/* Mobile Navigation (Bottom Bar) */}
       {isMobile && <MobileNavigation />}
       
-      <main className={`flex-grow ${isMobile ? 'pb-16 pt-16' : 'pt-4'}`}>
-        <Outlet />
+      {/* Main Content - CRITICAL: Remove overflow-y-auto here */}
+      <main className={`flex-grow w-full ${isMobile ? 'pb-16' : ''}`}>
+        <div className="w-full max-w-full overflow-x-hidden">
+          <Outlet />
+        </div>
       </main>
       
       <Footer />

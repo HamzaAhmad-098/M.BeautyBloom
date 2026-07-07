@@ -4,7 +4,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { getMe } from './store/slices/authSlice';
 import { selectCurrentUser, selectIsAuthenticated } from './store/slices/authSlice';
 import { Toaster } from 'react-hot-toast';
-
+import GoogleAnalytics from './components/GoogleAnalytics';
 // Layout
 import Layout from './components/layout/Layout';
 import ScrollToTop from './components/common/ScrollToTop';
@@ -102,6 +102,7 @@ function App() {
 
   return (
     <>
+    <GoogleAnalytics />
       {/* Scroll to top on route change */}
       <ScrollToTop />
       <Routes>

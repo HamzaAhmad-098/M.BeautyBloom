@@ -23,13 +23,13 @@ import { protect, admin } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// Public routes
+// ==================== PUBLIC ROUTES ====================
 router.post('/login', authUser);
 router.post('/register', registerUser);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password/:token', resetPassword);
 
-// Protected routes
+// ==================== PROTECTED ROUTES ====================
 router.use(protect); // All routes below require authentication
 
 router.post('/logout', logoutUser);
@@ -47,7 +47,7 @@ router.get('/wishlist', getWishlist);
 router.post('/wishlist/:productId', addToWishlist);
 router.delete('/wishlist/:productId', removeFromWishlist);
 
-// Admin routes
+// ==================== ADMIN ROUTES ====================
 router.use(admin); // All routes below require admin
 
 router.get('/', getUsers);

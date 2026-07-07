@@ -1,23 +1,37 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
-import { verifyEmail, resendVerification } from '@/store/slices/authSlice.js';
-import { FaEnvelope, FaCheckCircle, FaClock, FaPaperPlane } from 'react-icons/fa';
+import { verifyEmail, resendVerification, setVerificationRequired } from '@/store/slices/authSlice.js';
+import { FaEnvelope, FaCheckCircle, FaClock, FaPaperPlane, FaSpinner } from 'react-icons/fa';
+import { toast } from 'react-hot-toast';
 
 const VerifyEmail = () => {
   const { token } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { userInfo } = useSelector((state) => state.auth);
+  
+  const { userInfo, loading: authLoading, verificationRequired } = useSelector((state) => state.auth);
   const [loading, setLoading] = useState(false);
+  const [verificationStatus, setVerificationStatus] = useState(null); // 'pending', 'success', 'error'
   const [countdown, setCountdown] = useState(0);
   const [canResend, setCanResend] = useState(true);
+  
+  // Get unverified user from localStorage
+  const unverifiedUser = localStorage.getItem('unverifiedUser');
+  const userToVerify = unverifiedUser ? JSON.parse(unverifiedUser) : userInfo;
 
   useEffect(() => {
+    // If user is already verified and authenticated, redirect
+    if (userInfo?.isVerified && localStorage.getItem('token')) {
+      navigate('/');
+      return;
+    }
+
+    // If token is present in URL, verify it
     if (token) {
       handleVerify();
     }
-  }, [token]);
+  }, [token, userInfo, navigate]);
 
   useEffect(() => {
     let timer;
@@ -32,10 +46,43 @@ const VerifyEmail = () => {
   const handleVerify = async () => {
     try {
       setLoading(true);
-      await dispatch(verifyEmail(token)).unwrap();
-      setTimeout(() => navigate('/'), 3000);
+      setVerificationStatus('pending');
+      
+      // Dispatch verifyEmail action
+      const result = await dispatch(verifyEmail(token)).unwrap();
+      
+      if (result && result.token) {
+        // Verification successful
+        setVerificationStatus('success');
+        
+        toast.success('Email verified successfully! You are now logged in.');
+        
+        // Redirect after 3 seconds
+        setTimeout(() => {
+          if (result.user?.isAdmin) {
+            navigate('/admin/dashboard');
+          } else {
+            navigate('/');
+          }
+        }, 3000);
+      }
     } catch (error) {
       console.error('Verification failed:', error);
+      setVerificationStatus('error');
+      
+      // Show specific error messages
+      if (error.includes('Invalid or expired')) {
+        toast.error('The verification link is invalid or has expired.');
+      } else if (error.includes('already verified')) {
+        toast.error('This email is already verified.');
+        
+        // Try to log the user in if they're already verified
+        setTimeout(() => {
+          navigate('/login');
+        }, 2000);
+      } else {
+        toast.error('Email verification failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -43,15 +90,46 @@ const VerifyEmail = () => {
 
   const handleResend = async () => {
     try {
-      await dispatch(resendVerification()).unwrap();
       setCanResend(false);
-      setCountdown(60); // 60 seconds cooldown
+      
+      // Get email from unverified user or current user
+      const email = userToVerify?.email;
+      
+      if (!email) {
+        toast.error('No email found for verification');
+        return;
+      }
+      
+      const result = await dispatch(resendVerification(email)).unwrap();
+      
+      if (result) {
+        toast.success('Verification email sent successfully!');
+        setCountdown(60); // 60 seconds cooldown
+      }
     } catch (error) {
       console.error('Resend failed:', error);
+      
+      if (error.includes('already verified')) {
+        toast.error('Your email is already verified.');
+        navigate('/login');
+      } else if (error.includes('not found')) {
+        toast.error('User not found. Please register again.');
+        navigate('/register');
+      } else {
+        toast.error('Failed to resend verification email. Please try again.');
+      }
     }
   };
 
-  if (userInfo?.isVerified) {
+  const handleGoToLogin = () => {
+    // Clear verification requirement
+    dispatch(setVerificationRequired(false));
+    localStorage.removeItem('unverifiedUser');
+    navigate('/login');
+  };
+
+  // If user is already verified and has token, show success
+  if (userInfo?.isVerified && localStorage.getItem('token')) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center py-12 px-4">
         <div className="max-w-md w-full text-center">
@@ -63,7 +141,7 @@ const VerifyEmail = () => {
               Email Already Verified
             </h1>
             <p className="text-gray-600 mb-6">
-              Your email has already been verified. You can access all features.
+              Your email has already been verified. You are logged in and can access all features.
             </p>
             <button
               onClick={() => navigate('/')}
@@ -77,39 +155,90 @@ const VerifyEmail = () => {
     );
   }
 
-  if (token) {
+  // Show verification in progress
+  if (token && verificationStatus === 'pending') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-100 flex items-center justify-center py-12 px-4">
         <div className="max-w-md w-full text-center">
-          {loading ? (
-            <div className="bg-white rounded-2xl shadow-xl p-8">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-6"></div>
-              <h1 className="text-xl font-bold text-gray-900 mb-4">
-                Verifying your email...
-              </h1>
-              <p className="text-gray-600">Please wait while we verify your email address.</p>
-            </div>
-          ) : (
-            <div className="bg-white rounded-2xl shadow-xl p-8">
-              <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <FaCheckCircle className="text-blue-500 text-4xl" />
-              </div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-4">
-                Email Verified Successfully!
-              </h1>
-              <p className="text-gray-600 mb-6">
-                Your email has been verified. You will be redirected to the homepage shortly.
-              </p>
-              <div className="animate-pulse">
-                <p className="text-sm text-blue-600">Redirecting in 3 seconds...</p>
-              </div>
-            </div>
-          )}
+          <div className="bg-white rounded-2xl shadow-xl p-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-6"></div>
+            <h1 className="text-xl font-bold text-gray-900 mb-4">
+              Verifying your email...
+            </h1>
+            <p className="text-gray-600">Please wait while we verify your email address.</p>
+          </div>
         </div>
       </div>
     );
   }
 
+  // Show verification success
+  if (token && verificationStatus === 'success') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center py-12 px-4">
+        <div className="max-w-md w-full text-center">
+          <div className="bg-white rounded-2xl shadow-xl p-8">
+            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <FaCheckCircle className="text-green-500 text-4xl" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">
+              Email Verified Successfully!
+            </h1>
+            <p className="text-gray-600 mb-6">
+              Your email has been verified. You are now logged in and will be redirected shortly.
+            </p>
+            <div className="animate-pulse">
+              <p className="text-sm text-green-600">Redirecting in 3 seconds...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show verification error
+  if (token && verificationStatus === 'error') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-50 to-pink-100 flex items-center justify-center py-12 px-4">
+        <div className="max-w-md w-full text-center">
+          <div className="bg-white rounded-2xl shadow-xl p-8">
+            <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <FaClock className="text-red-500 text-4xl" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">
+              Verification Failed
+            </h1>
+            <p className="text-gray-600 mb-6">
+              The verification link is invalid or has expired. Please request a new verification email.
+            </p>
+            {userToVerify?.email ? (
+              <button
+                onClick={handleResend}
+                className="w-full bg-gradient-to-r from-red-500 to-pink-600 text-white py-3 px-4 rounded-lg font-semibold hover:opacity-90 transition-opacity mb-4"
+              >
+                Resend Verification Email
+              </button>
+            ) : (
+              <button
+                onClick={handleGoToLogin}
+                className="w-full bg-gradient-to-r from-blue-500 to-cyan-600 text-white py-3 px-4 rounded-lg font-semibold hover:opacity-90 transition-opacity mb-4"
+              >
+                Go to Login
+              </button>
+            )}
+            <button
+              onClick={() => navigate('/register')}
+              className="w-full border border-gray-300 text-gray-700 py-3 px-4 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
+            >
+              Register Again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Default view - show resend verification options
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 to-purple-50 flex items-center justify-center py-12 px-4">
       <div className="max-w-md w-full">
@@ -132,7 +261,7 @@ const VerifyEmail = () => {
               <h3 className="font-semibold text-gray-900">Check your inbox</h3>
               <p className="text-gray-600 text-sm">
                 We've sent a verification email to{' '}
-                <span className="font-semibold">{userInfo?.email}</span>
+                <span className="font-semibold">{userToVerify?.email || 'your email'}</span>
               </p>
             </div>
           </div>
@@ -145,28 +274,43 @@ const VerifyEmail = () => {
           </div>
 
           <div className="space-y-4">
-            <button
-              onClick={handleResend}
-              disabled={!canResend}
-              className={`w-full py-3 px-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center space-x-2 ${
-                canResend
-                  ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white hover:opacity-90'
-                  : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              <FaPaperPlane />
-              <span>
-                {canResend
-                  ? 'Resend Verification Email'
-                  : `Resend available in ${countdown}s`}
-              </span>
-            </button>
+            {userToVerify?.email ? (
+              <button
+                onClick={handleResend}
+                disabled={!canResend || loading}
+                className={`w-full py-3 px-4 rounded-lg font-semibold transition-all duration-200 flex items-center justify-center space-x-2 ${
+                  canResend && !loading
+                    ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white hover:opacity-90'
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                {loading ? (
+                  <FaSpinner className="animate-spin" />
+                ) : (
+                  <FaPaperPlane />
+                )}
+                <span>
+                  {loading
+                    ? 'Sending...'
+                    : canResend
+                    ? 'Resend Verification Email'
+                    : `Resend available in ${countdown}s`}
+                </span>
+              </button>
+            ) : (
+              <button
+                onClick={handleGoToLogin}
+                className="w-full bg-gradient-to-r from-blue-500 to-cyan-600 text-white py-3 px-4 rounded-lg font-semibold hover:opacity-90 transition-opacity"
+              >
+                Log In to Resend Verification
+              </button>
+            )}
 
             <button
-              onClick={() => navigate('/')}
+              onClick={handleGoToLogin}
               className="w-full border border-gray-300 text-gray-700 py-3 px-4 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
             >
-              Go to Homepage
+              Go to Login
             </button>
           </div>
 

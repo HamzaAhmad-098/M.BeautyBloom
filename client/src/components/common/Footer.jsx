@@ -5,22 +5,52 @@ import { SiTiktok } from 'react-icons/si';
 
 const Footer = () => {
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
       setShowScrollTop(window.scrollY > 300);
     };
+    
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener('resize', checkMobile);
+    
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', checkMobile);
+    };
   }, []);
 
   const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (isMobile) {
+      // Scroll main content container on mobile
+      const mainContent = document.querySelector('main');
+      if (mainContent) {
+        mainContent.scrollTo({
+          top: 0,
+          left: 0,
+          behavior: 'smooth'
+        });
+      }
+    }
+    
+    // Always scroll window
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: 'smooth'
+    });
   };
 
   // Function to handle all footer link clicks
   const handleFooterLinkClick = () => {
-    scrollToTop();
+    // Small delay to ensure route change happens first
+    setTimeout(scrollToTop, 100);
   };
 
   const quickLinks = [
@@ -45,7 +75,6 @@ const Footer = () => {
     { name: 'Haircare', path: '/shop?category=haircare' },
     { name: 'Fragrance', path: '/shop?category=fragrance' },
   ];
-  
 
   return (
     <footer className="bg-gray-900 text-white pt-12 pb-6 animate-fade-in">
@@ -148,19 +177,19 @@ const Footer = () => {
               </li>
             </ul>
         
-        <div className="border-t border-gray-800 mt-8 pt-6">
-          <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
-            <p className="text-gray-400 text-sm text-center md:text-left">
-              © {new Date().getFullYear()} Powered by HamzaxDevelopers. All rights reserved. (Contact: 03297474472)
-            </p>
-            <div className="flex items-center flex-wrap justify-center gap-4">
-              <div className="text-xs bg-gray-800 px-2 py-1 rounded">COD</div>
-              <div className="text-xs bg-gray-800 px-2 py-1 rounded">JazzCash</div>
-              <div className="text-xs bg-gray-800 px-2 py-1 rounded">Easypaisa</div>
-              <div className="text-xs bg-gray-800 px-2 py-1 rounded">Card</div>
+            <div className="border-t border-gray-800 mt-8 pt-6">
+              <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
+                <p className="text-gray-400 text-sm text-center md:text-left">
+                  © {new Date().getFullYear()} Powered by HamzaxDevelopers. All rights reserved. (Contact: 03297474472)
+                </p>
+                <div className="flex items-center flex-wrap justify-center gap-4">
+                  <div className="text-xs bg-gray-800 px-2 py-1 rounded">COD</div>
+                  <div className="text-xs bg-gray-800 px-2 py-1 rounded">JazzCash</div>
+                  <div className="text-xs bg-gray-800 px-2 py-1 rounded">Easypaisa</div>
+                  <div className="text-xs bg-gray-800 px-2 py-1 rounded">Card</div>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
             <div className="mt-6">
               <h4 className="font-semibold mb-3">Newsletter</h4>

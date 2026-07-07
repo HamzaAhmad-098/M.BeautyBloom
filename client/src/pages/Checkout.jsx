@@ -5,7 +5,7 @@ import { createOrder } from '../store/slices/orderSlice.js';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { FaShoppingCart, FaTruck, FaCreditCard, FaCheckCircle } from 'react-icons/fa';
-
+import { analytics } from '@/utils/analytics';
 const Checkout = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -110,9 +110,11 @@ const Checkout = () => {
   };
 
   useEffect(() => {
-    // Clear any user session data to ensure guest mode
+    // Clear any user sessi
+    // on data to ensure guest mode
     localStorage.removeItem('redirectPath');
   }, []);
+
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;

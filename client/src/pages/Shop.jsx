@@ -3,12 +3,14 @@ import { useSearchParams, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import ProductCard from '../components/product/ProductCard';
 import ProductFilter from '../components/product/ProductFilter';
-import { FaFilter, FaTimes, FaSearch, FaSpinner } from 'react-icons/fa';
+import { FaFilter, FaTimes, FaSearch, FaSpinner, FaStar } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 
 const Shop = () => {
   const [products, setProducts] = useState([]);
+  const [featuredProducts, setFeaturedProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [featuredLoading, setFeaturedLoading] = useState(false);
   const [totalPages, setTotalPages] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
@@ -57,94 +59,92 @@ const Shop = () => {
     setCurrentPage(parseInt(page));
   }, [location.search, searchParams]);
 
+  // Fetch featured products when shop loads with no filters
   useEffect(() => {
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      console.log('Fetching products with filters:', filters);
-      
-      const params = new URLSearchParams();
-      
-      // Add all filters to params (use correct parameter names)
-      if (filters.category) params.append('category', filters.category);
-      if (filters.search) params.append('keyword', filters.search);
-      if (filters.brand.length > 0) params.append('brand', filters.brand.join(','));
-      if (filters.minPrice) params.append('minPrice', filters.minPrice);
-      if (filters.maxPrice) params.append('maxPrice', filters.maxPrice);
-      if (filters.rating) params.append('rating', filters.rating);
-      if (filters.sort) params.append('sort', filters.sort);
-      params.append('pageNumber', currentPage);
-      // Note: Backend uses fixed pageSize of 12, so we don't need to send it
-      
-      console.log('Request params:', params.toString());
-      
-      const API_URL = import.meta.env.VITE_API_URL || 
-        (window.location.origin.includes('mbeautybloom.shop')
-          ? '/api' 
-          : 'http://localhost:5000/api');
-      
-      const response = await axios.get(`${API_URL}/products?${params}`);
-      
-      console.log('Products response:', {
-        data: response.data,
-        productsCount: response.data.products?.length || 0,
-        totalPages: response.data.pages
+    const fetchFeaturedProducts = async () => {
+      // Only fetch featured products when no filters are active
+      const hasActiveFilters = Object.entries(filters).some(([key, value]) => {
+        if (key === 'sort') return false;
+        if (Array.isArray(value)) return value.length > 0;
+        return value !== '';
       });
-      
-      // Handle response
-      const productsData = response.data.products || [];
-      setProducts(productsData);
-      setTotalPages(response.data.pages || 1);
-      
-    } catch (error) {
-      console.error('Error fetching products:', error);
-      console.error('Error details:', error.response?.data || error.message);
-      toast.error('Failed to load products');
-      setProducts([]);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  fetchProducts();
-}, [filters, currentPage]);
-
-const fetchBrands = async () => {
-  try {
-    const API_URL = import.meta.env.VITE_API_URL || 
-      (window.location.origin.includes('mbeautybloom.shop')
-        ? '/api' 
-        : 'http://localhost:5000/api');
-    
-    const response = await axios.get(`${API_URL}/products/brands`);
-    return response.data; // Should return an array of brand names
-  } catch (error) {
-    console.error('Error fetching brands:', error);
-    return [];
-  }
-};
-  // Helper function to extract public_id from Cloudinary URL
-  const extractPublicIdFromCloudinaryUrl = (url) => {
-    if (!url || !url.includes('cloudinary.com')) return null;
-    
-    try {
-      const urlObj = new URL(url);
-      const pathParts = urlObj.pathname.split('/');
-      
-      // Find the upload folder and get everything after it
-      const uploadIndex = pathParts.indexOf('upload');
-      if (uploadIndex !== -1) {
-        // Join all parts after 'upload' and remove file extension
-        const publicIdWithExt = pathParts.slice(uploadIndex + 2).join('/');
-        return publicIdWithExt.replace(/\.[^/.]+$/, ''); // Remove file extension
+      if (!hasActiveFilters) {
+        setFeaturedLoading(true);
+        try {
+          const API_URL = import.meta.env.VITE_API_URL || 
+            (window.location.origin.includes('mbeautybloom.shop')
+              ? '/api' 
+              : 'http://localhost:5000/api');
+          
+          const response = await axios.get(`${API_URL}/products/featured`);
+          setFeaturedProducts(response.data || []);
+        } catch (error) {
+          console.error('Error fetching featured products:', error);
+          setFeaturedProducts([]);
+        } finally {
+          setFeaturedLoading(false);
+        }
+      } else {
+        setFeaturedProducts([]); // Clear featured products when filters are active
       }
-    } catch (error) {
-      console.warn('Error extracting public_id from URL:', url);
-    }
-    
-    return null;
-  };
+    };
 
+    fetchFeaturedProducts();
+  }, [filters]);
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      setLoading(true);
+      try {
+        console.log('Fetching products with filters:', filters);
+        
+        const params = new URLSearchParams();
+        
+        // Add all filters to params
+        if (filters.category) params.append('category', filters.category);
+        if (filters.search) params.append('keyword', filters.search);
+        if (filters.brand.length > 0) params.append('brand', filters.brand.join(','));
+        if (filters.minPrice) params.append('minPrice', filters.minPrice);
+        if (filters.maxPrice) params.append('maxPrice', filters.maxPrice);
+        if (filters.rating) params.append('rating', filters.rating);
+        if (filters.sort) params.append('sort', filters.sort);
+        params.append('pageNumber', currentPage);
+        
+        console.log('Request params:', params.toString());
+        
+        const API_URL = import.meta.env.VITE_API_URL || 
+          (window.location.origin.includes('mbeautybloom.shop')
+            ? '/api' 
+            : 'http://localhost:5000/api');
+        
+        const response = await axios.get(`${API_URL}/products?${params}`);
+        
+        console.log('Products response:', {
+          data: response.data,
+          productsCount: response.data.products?.length || 0,
+          totalPages: response.data.pages
+        });
+        
+        // Handle response
+        const productsData = response.data.products || [];
+        setProducts(productsData);
+        setTotalPages(response.data.pages || 1);
+        
+      } catch (error) {
+        console.error('Error fetching products:', error);
+        console.error('Error details:', error.response?.data || error.message);
+        toast.error('Failed to load products');
+        setProducts([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProducts();
+  }, [filters, currentPage]);
+
+  // ADD THIS MISSING FUNCTION
   const handleFilterChange = (newFilters) => {
     const updatedFilters = { ...filters, ...newFilters };
     setFilters(updatedFilters);
@@ -187,12 +187,56 @@ const fetchBrands = async () => {
     setCurrentPage(1);
   };
 
-  // Count active filters
+  // Check if no filters are active
+  const hasActiveFilters = Object.entries(filters).some(([key, value]) => {
+    if (key === 'sort') return false;
+    if (Array.isArray(value)) return value.length > 0;
+    return value !== '';
+  });
+
+  // Count active filters for display
   const activeFiltersCount = Object.entries(filters).filter(([key, value]) => {
-    if (key === 'sort') return false; // Don't count sort
+    if (key === 'sort') return false;
     if (Array.isArray(value)) return value.length > 0;
     return value !== '';
   }).length;
+
+  const fetchBrands = async () => {
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 
+        (window.location.origin.includes('mbeautybloom.shop')
+          ? '/api' 
+          : 'http://localhost:5000/api');
+      
+      const response = await axios.get(`${API_URL}/products/brands`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching brands:', error);
+      return [];
+    }
+  };
+
+  // Helper function to extract public_id from Cloudinary URL
+  const extractPublicIdFromCloudinaryUrl = (url) => {
+    if (!url || !url.includes('cloudinary.com')) return null;
+    
+    try {
+      const urlObj = new URL(url);
+      const pathParts = urlObj.pathname.split('/');
+      
+      // Find the upload folder and get everything after it
+      const uploadIndex = pathParts.indexOf('upload');
+      if (uploadIndex !== -1) {
+        // Join all parts after 'upload' and remove file extension
+        const publicIdWithExt = pathParts.slice(uploadIndex + 2).join('/');
+        return publicIdWithExt.replace(/\.[^/.]+$/, '');
+      }
+    } catch (error) {
+      console.warn('Error extracting public_id from URL:', url);
+    }
+    
+    return null;
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-6 px-4 animate-fade-in">
@@ -206,7 +250,7 @@ const fetchBrands = async () => {
             {loading ? 'Loading products...' : `${products.length} products found`}
           </p>
         </div>
-
+        
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Mobile Filter Button */}
           <div className="lg:hidden">
@@ -223,7 +267,7 @@ const fetchBrands = async () => {
               )}
             </button>
           </div>
-
+  
           {/* Mobile Filters */}
           {showFilters && (
             <div className="lg:hidden mb-6 animate-slide-in">
@@ -237,7 +281,7 @@ const fetchBrands = async () => {
               </div>
             </div>
           )}
-
+          
           {/* Sidebar Filters - Desktop */}
           <div className="hidden lg:block w-64 flex-shrink-0">
             <div className="bg-white rounded-lg shadow p-4 sticky top-24">
@@ -249,7 +293,7 @@ const fetchBrands = async () => {
             </div>
           </div>
 
-          {/* Main Content */}
+          {/* Main Content Area */}
           <div className="flex-1">
             {/* Sort Bar */}
             <div className="bg-white rounded-lg shadow p-4 mb-6">
@@ -279,66 +323,103 @@ const fetchBrands = async () => {
                   </select>
                 </div>
               </div>
-              
-              {/* Active Filters Display */}
-              {activeFiltersCount > 0 && (
-                <div className="mt-4 pt-4 border-t flex flex-wrap gap-2 items-center">
-                  <span className="text-sm text-gray-600">Active filters:</span>
-                  {filters.category && (
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
-                      {filters.category}
-                      <button
-                        onClick={() => handleFilterChange({ category: '' })}
-                        className="ml-2 hover:text-primary-900"
-                      >
-                        <FaTimes className="text-xs" />
-                      </button>
-                    </span>
-                  )}
-                  {filters.brand.map(brand => (
-                    <span key={brand} className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                      {brand}
-                      <button
-                        onClick={() => handleFilterChange({ brand: filters.brand.filter(b => b !== brand) })}
-                        className="ml-2 hover:text-purple-900"
-                      >
-                        <FaTimes className="text-xs" />
-                      </button>
-                    </span>
-                  ))}
-                  {(filters.minPrice || filters.maxPrice) && (
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      {filters.minPrice && `Rs. ${filters.minPrice}`}
-                      {filters.minPrice && filters.maxPrice && ' - '}
-                      {filters.maxPrice && `Rs. ${filters.maxPrice}`}
-                      <button
-                        onClick={() => handleFilterChange({ minPrice: '', maxPrice: '' })}
-                        className="ml-2 hover:text-green-900"
-                      >
-                        <FaTimes className="text-xs" />
-                      </button>
-                    </span>
-                  )}
-                  {filters.rating && (
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                      {filters.rating}★ & above
-                      <button
-                        onClick={() => handleFilterChange({ rating: '' })}
-                        className="ml-2 hover:text-yellow-900"
-                      >
-                        <FaTimes className="text-xs" />
-                      </button>
-                    </span>
-                  )}
-                  <button
-                    onClick={clearFilters}
-                    className="text-xs text-gray-600 hover:text-gray-900 underline"
-                  >
-                    Clear all
-                  </button>
-                </div>
-              )}
             </div>
+            
+            {/* Featured Products Section - Only show when no filters */}
+            {!hasActiveFilters && featuredProducts.length > 0 && (
+              <div className="mb-12">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center gap-2">
+                    <FaStar className="text-yellow-500" />
+                    Featured Products
+                    <FaStar className="text-yellow-500" />
+                  </h2>
+                  <span className="text-sm text-gray-500 bg-primary-50 px-3 py-1 rounded-full">
+                    {featuredProducts.length} premium items
+                  </span>
+                </div>
+                
+                {featuredLoading ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
+                    {[...Array(6)].map((_, i) => (
+                      <div key={i} className="bg-gray-100 rounded-lg h-48 animate-pulse"></div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mb-10">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
+                      {featuredProducts.map((product) => (
+                        <div key={product._id} className="transform transition-transform duration-300 hover:scale-[1.02]">
+                          <ProductCard product={product} />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="text-center mb-8">
+                      <div className="inline-block h-1 w-24 bg-gradient-to-r from-primary-500 to-pink-500 rounded-full"></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Active Filters Display */}
+            {activeFiltersCount > 0 && (
+              <div className="mb-6 pt-4 border-t flex flex-wrap gap-2 items-center">
+                <span className="text-sm text-gray-600">Active filters:</span>
+                {filters.category && (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
+                    {filters.category}
+                    <button
+                      onClick={() => handleFilterChange({ category: '' })}
+                      className="ml-2 hover:text-primary-900"
+                    >
+                      <FaTimes className="text-xs" />
+                    </button>
+                  </span>
+                )}
+                {filters.brand.map(brand => (
+                  <span key={brand} className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                    {brand}
+                    <button
+                      onClick={() => handleFilterChange({ brand: filters.brand.filter(b => b !== brand) })}
+                      className="ml-2 hover:text-purple-900"
+                    >
+                      <FaTimes className="text-xs" />
+                    </button>
+                  </span>
+                ))}
+                {(filters.minPrice || filters.maxPrice) && (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    {filters.minPrice && `Rs. ${filters.minPrice}`}
+                    {filters.minPrice && filters.maxPrice && ' - '}
+                    {filters.maxPrice && `Rs. ${filters.maxPrice}`}
+                    <button
+                      onClick={() => handleFilterChange({ minPrice: '', maxPrice: '' })}
+                      className="ml-2 hover:text-green-900"
+                    >
+                      <FaTimes className="text-xs" />
+                    </button>
+                  </span>
+                )}
+                {filters.rating && (
+                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                    {filters.rating}★ & above
+                    <button
+                      onClick={() => handleFilterChange({ rating: '' })}
+                      className="ml-2 hover:text-yellow-900"
+                    >
+                      <FaTimes className="text-xs" />
+                    </button>
+                  </span>
+                )}
+                <button
+                  onClick={clearFilters}
+                  className="text-xs text-gray-600 hover:text-gray-900 underline"
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
 
             {/* Products Grid */}
             {loading ? (

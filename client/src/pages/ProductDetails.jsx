@@ -5,8 +5,9 @@ import { addToCart } from '../store/slices/cartSlice';
 import { FaStar, FaShippingFast, FaShieldAlt, FaUndo, FaHeart, FaShareAlt, FaMinus, FaPlus, FaCheck, FaUser, FaEdit, FaTrash } from 'react-icons/fa';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
-
+import { analytics } from '@/utils/analytics';
 const ProductDetails = () => {
+  
   const { id } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -66,50 +67,56 @@ const ProductDetails = () => {
     return 'https://via.placeholder.com/600';
   };
 
-  useEffect(() => {
-    const fetchProduct = async () => {
-      try {
-        setLoading(true);
-        const response = await axios.get(`/api/products/${id}`);
-        const productData = response.data;
-        
-        // Handle stock field properly
-        if (productData.countInStock !== undefined) {
-          productData.stock = productData.countInStock;
-        } else if (productData.stock !== undefined) {
-          productData.stock = productData.stock;
-        } else {
-          productData.stock = 0;
-        }
-        
-        productData.countInStock = productData.stock;
-        
-        setProduct(productData);
-        setReviews(productData.reviews || []);
-        
-        // Check if user has already reviewed this product
-        if (userInfo) {
-          const hasReviewed = productData.reviews?.some(
-            review => review.user === userInfo._id || review.user?._id === userInfo._id
-          );
-          setUserHasReviewed(hasReviewed);
-        }
-        
-        if (productData.variants && productData.variants.length > 0) {
-          setSelectedVariant(productData.variants[0].name);
-        }
-      } catch (error) {
-        console.error('Error fetching product details:', error);
-        toast.error('Product not found');
-        navigate('/shop');
-      } finally {
-        setLoading(false);
+  // ProductDetails.jsx - Fix the useEffect dependency array
+
+useEffect(() => {
+  const fetchProduct = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`/api/products/${id}`);
+      const productData = response.data;
+      
+      // Handle stock field properly
+      if (productData.countInStock !== undefined) {
+        productData.stock = productData.countInStock;
+      } else if (productData.stock !== undefined) {
+        productData.stock = productData.stock;
+      } else {
+        productData.stock = 0;
       }
-    };
+      
+      productData.countInStock = productData.stock;
+      
+      setProduct(productData);
+      setReviews(productData.reviews || []);
+      
+      // Check if user has already reviewed this product
+      if (userInfo) {
+        const hasReviewed = productData.reviews?.some(
+          review => review.user === userInfo._id || review.user?._id === userInfo._id
+        );
+        setUserHasReviewed(hasReviewed);
+      }
+      
+      if (productData.variants && productData.variants.length > 0) {
+        setSelectedVariant(productData.variants[0].name);
+      }
+      
+      // Track product view AFTER setting product state
+      if (productData) {
+        analytics.trackProductView(productData);
+      }
+    } catch (error) {
+      console.error('Error fetching product details:', error);
+      toast.error('Product not found');
+      navigate('/shop');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchProduct();
-  }, [id, navigate, userInfo]);
-
+  fetchProduct();
+}, [id, navigate, userInfo]); // REMOVED 'product' from dependencies to prevent infinite loop
   const handleAddToCart = () => {
     if (product.stock < quantity) {
       toast.error('Not enough stock available');

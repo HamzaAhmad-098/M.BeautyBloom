@@ -14,13 +14,12 @@ const TrackOrder = () => {
   const { userInfo } = useSelector((state) => state.auth);
 
   const [orderId, setOrderId] = useState(routeId || '');
-  const [guestEmail, setGuestEmail] = useState(new URLSearchParams(location.search).get('guestEmail') || '');
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(false);
   const [polling, setPolling] = useState(false);
   const intervalRef = useRef(null);
 
-  const fetchOrder = async (id, email = '') => {
+  const fetchOrder = async (id) => {
     if (!id) {
       toast.error('Please provide an order id');
       return;
@@ -33,7 +32,7 @@ const TrackOrder = () => {
         headers.Authorization = `Bearer ${userInfo.token}`;
       }
 
-      const url = `/api/orders/${id}${email ? `?guestEmail=${encodeURIComponent(email)}` : ''}`;
+      const url = `/api/orders/${id}`;
       const { data } = await axios.get(url, { headers });
 
       setOrder(data);
@@ -41,7 +40,7 @@ const TrackOrder = () => {
 
       // Start polling if order not in terminal state
       if (!['Delivered', 'Cancelled'].includes(data.status)) {
-        startPolling(id, email);
+        startPolling(id);
       } else {
         stopPolling();
       }
@@ -53,7 +52,7 @@ const TrackOrder = () => {
     }
   };
 
-  const startPolling = (id, email) => {
+  const startPolling = (id) => {
     // avoid creating multiple intervals
     if (intervalRef.current) return;
     setPolling(true);
@@ -62,7 +61,7 @@ const TrackOrder = () => {
         try {
           const headers = {};
           if (userInfo?.token) headers.Authorization = `Bearer ${userInfo.token}`;
-          const url = `/api/orders/${id}${email ? `?guestEmail=${encodeURIComponent(email)}` : ''}`;
+          const url = `/api/orders/${id}`;
           const { data } = await axios.get(url, { headers });
           setOrder(data);
           if (['Delivered', 'Cancelled'].includes(data.status)) {
@@ -70,7 +69,7 @@ const TrackOrder = () => {
             toast.success(`Order status updated: ${data.status}`);
           }
         } catch (err) {
-          // If unauthorized for guest access, stop retrying
+          // If unauthorized, stop retrying
           if (err.response?.status === 401 || err.response?.status === 403) {
             stopPolling();
             const msg = err.response?.data?.message || 'Not authorized to view this order';
@@ -90,11 +89,10 @@ const TrackOrder = () => {
     setPolling(false);
   };
 
-  // If route has id on mount and user is logged in (or guestEmail provided), fetch immediately
+  // If route has id on mount, fetch immediately
   useEffect(() => {
     if (routeId) {
-      // prefer guestEmail query param when provided
-      fetchOrder(routeId, guestEmail);
+      fetchOrder(routeId);
       setOrderId(routeId);
     }
     // cleanup on unmount
@@ -108,16 +106,10 @@ const TrackOrder = () => {
       toast.error('Enter an order id');
       return;
     }
-    // If user is guest must provide email
-    if (!userInfo && !guestEmail) {
-      toast.error('Enter the email used for the order');
-      return;
-    }
 
-    // Update URL for shareability (include guestEmail for guest)
-    const search = guestEmail ? `?guestEmail=${encodeURIComponent(guestEmail)}` : '';
-    navigate(`/track-order/${orderId}${search}`, { replace: true });
-    fetchOrder(orderId, guestEmail);
+    // Update URL for shareability
+    navigate(`/track-order/${orderId}`, { replace: true });
+    fetchOrder(orderId);
   };
 
   const getStepIndex = (status) => {
@@ -138,11 +130,11 @@ const TrackOrder = () => {
       <div className="max-w-5xl mx-auto px-4">
         <h1 className="text-2xl font-bold mb-4">Track Your Order</h1>
 
-        {/* Search / Guest form */}
+        {/* Search form */}
         {!routeId && (
           <div className="mb-6 bg-white p-4 rounded shadow-sm">
-            <form onSubmit={onSearchSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-              <div className="md:col-span-1">
+            <form onSubmit={onSearchSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+              <div>
                 <label className="text-sm font-medium">Order ID</label>
                 <input
                   value={orderId}
@@ -151,18 +143,6 @@ const TrackOrder = () => {
                   className="mt-1 border p-2 rounded w-full"
                 />
               </div>
-
-              {!userInfo && (
-                <div className="md:col-span-1">
-                  <label className="text-sm font-medium">Email used for order</label>
-                  <input
-                    value={guestEmail}
-                    onChange={(e) => setGuestEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className="mt-1 border p-2 rounded w-full"
-                  />
-                </div>
-              )}
 
               <div>
                 <button
@@ -315,7 +295,7 @@ const TrackOrder = () => {
             </div>
 
             <div className="mt-6 flex gap-3">
-              <button onClick={() => fetchOrder(order._id, guestEmail)} className="bg-gray-100 px-4 py-2 rounded">Refresh</button>
+              <button onClick={() => fetchOrder(order._id)} className="bg-gray-100 px-4 py-2 rounded">Refresh</button>
               {order.trackingNumber && (
                 <button onClick={() => copyToClipboard(order.trackingNumber)} className="bg-primary-500 text-white px-4 py-2 rounded">Copy Tracking</button>
               )}

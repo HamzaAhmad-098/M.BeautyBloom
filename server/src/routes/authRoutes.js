@@ -56,7 +56,7 @@ router.post('/register', registerLimiter, register);
 router.post('/login', loginLimiter, login);
 router.post('/forgot-password', forgotPasswordLimiter, forgotPassword);
 router.put('/reset-password/:resettoken', resetPassword);
-router.get('/verify-email/:token', verifyEmail);
+router.post('/verify-email/:token', verifyEmail); // CHANGED FROM GET TO POST
 router.post('/check-email', checkEmailAvailability);
 
 // Protected routes (require authentication)

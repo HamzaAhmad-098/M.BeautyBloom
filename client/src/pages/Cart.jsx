@@ -4,7 +4,7 @@ import { removeItem, updateQuantity, clearCart } from '../store/slices/cartSlice
 import { FaTrash, FaPlus, FaMinus, FaShoppingBag, FaArrowLeft, FaExclamationTriangle } from 'react-icons/fa';
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
-
+import { analytics } from '@/utils/analytics';
 const Cart = () => {
   const { cartItems, cartTotal, itemsCount } = useSelector((state) => state.cart);
   const { userInfo } = useSelector((state) => state.auth);
@@ -123,12 +123,14 @@ const Cart = () => {
     if (window.confirm('Remove this item from cart?')) {
       dispatch(removeItem(itemId));
     }
+    analytics.trackRemoveFromCart(item);
   };
 
   const handleClearCart = () => {
     if (window.confirm('Are you sure you want to clear your cart?')) {
       dispatch(clearCart());
     }
+    
   };
 
   // Check if there are any out of stock items

@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { login } from '../store/slices/authSlice.js';
 import { FaEnvelope, FaLock, FaEye, FaEyeSlash, FaSpinner } from 'react-icons/fa';
+import { analytics } from '@/utils/analytics';
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,6 +20,11 @@ const Login = () => {
   const { loading, error: authError, userInfo, isAuthenticated } = authState;
 
   const redirect = location.search ? location.search.split('=')[1] : '/';
+  useEffect(() => {
+  if (isAuthenticated && userInfo) {
+    analytics.trackRegistration('email');
+  }
+}, [isAuthenticated, userInfo]);
 
   // Debug logging
   useEffect(() => {
@@ -44,32 +50,34 @@ const Login = () => {
     }
   }, [userInfo, navigate]);
   // Handle login redirection
-  useEffect(() => {
-    console.log('Checking authentication...');
-    console.log('isAuthenticated:', isAuthenticated);
-    console.log('userInfo:', userInfo);
+// In the useEffect that handles login redirection, add verification check:
+// In Login.jsx, update the useEffect for redirection:
+useEffect(() => {
+  console.log('Checking authentication...');
+  console.log('isAuthenticated:', isAuthenticated);
+  console.log('userInfo:', userInfo);
+  
+  if (isAuthenticated && userInfo) {
+    console.log('User is authenticated, redirecting...');
     
-    if (isAuthenticated && userInfo) {
-      console.log('User is authenticated, redirecting...');
-      
-      // Check if there's a stored redirect path from protected routes
-      const storedRedirect = localStorage.getItem('redirectPath') || redirect;
-      
-      // Clear stored redirect
-      if (localStorage.getItem('redirectPath')) {
-        localStorage.removeItem('redirectPath');
-      }
-      
-      // Redirect based on user role
-      if (userInfo.isAdmin) {
-        console.log('Redirecting admin to dashboard');
-        navigate('/admin/dashboard', { replace: true });
-      } else {
-        console.log('Redirecting regular user to:', storedRedirect);
-        navigate(storedRedirect, { replace: true });
-      }
+    // Check if there's a stored redirect path from protected routes
+    const storedRedirect = localStorage.getItem('redirectPath') || redirect;
+    
+    // Clear stored redirect
+    if (localStorage.getItem('redirectPath')) {
+      localStorage.removeItem('redirectPath');
     }
-  }, [isAuthenticated, userInfo, navigate, redirect]);
+    
+    // Redirect based on user role and verification status
+    if (userInfo.isAdmin) {
+      console.log('Redirecting admin to dashboard');
+      navigate('/admin/dashboard', { replace: true });
+    } else {
+      console.log('Redirecting regular user to:', storedRedirect);
+      navigate(storedRedirect, { replace: true });
+    }
+  }
+}, [isAuthenticated, userInfo, navigate, redirect]);
 
 // In the handleSubmit function, add verification check
 const handleSubmit = async (e) => {
@@ -113,6 +121,7 @@ const handleSubmit = async (e) => {
         }, 2000);
       }
     }
+    analytics.trackLogin('email');
   } catch (error) {
     console.error('Login error:', error);
     setLocalError('An unexpected error occurred. Please try again.');

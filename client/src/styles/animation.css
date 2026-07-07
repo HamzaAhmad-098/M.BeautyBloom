@@ -127,3 +127,28 @@ main {
   width: device-width;
   zoom: 1.0;
 }
+/* Mobile scrolling fixes */
+@media (max-width: 768px) {
+  /* Ensure content flows naturally */
+  .mobile-scroll-container {
+    position: relative;
+    width: 100%;
+    min-height: 100vh;
+    overflow-y: visible !important;
+    overflow-x: hidden !important;
+  }
+  
+  /* Fix for iOS momentum scrolling */
+  .ios-momentum-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Critical fix: Remove any overflow restrictions on main content */
+main {
+  overflow: visible !important;
+}
+
+main > * {
+  overflow: visible !important;
+}

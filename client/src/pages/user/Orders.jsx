@@ -206,12 +206,6 @@ const Orders = () => {
                   {/* Action Buttons */}
                   <div className="mt-6 pt-6 border-t flex flex-wrap gap-3">
                     <Link
-                      to={`/orders/${order._id}`}
-                      className="px-4 py-2 bg-primary-50 text-primary-600 rounded-lg font-medium hover:bg-primary-100 transition-colors flex items-center gap-2"
-                    >
-                      <FaEye /> View Details
-                    </Link>
-                    <Link
                       to={`/track-order/${order._id}`}
                       className="px-4 py-2 bg-blue-50 text-blue-600 rounded-lg font-medium hover:bg-blue-100 transition-colors flex items-center gap-2"
                     >

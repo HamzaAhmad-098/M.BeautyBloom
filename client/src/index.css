@@ -8,9 +8,11 @@
   box-sizing: border-box;
 }
 
+/* Ensure html and body take full height and allow scrolling */
 html {
   width: 100%;
-  overflow-x: hidden; /* Only prevent horizontal scroll on html */
+  height: 100%;
+  overflow-x: hidden; /* Prevent horizontal scroll */
 }
 
 body {
@@ -20,9 +22,20 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   width: 100%;
-  overflow-x: hidden; /* Prevent horizontal scroll on body */
-  overflow-y: auto; /* Ensure vertical scroll is allowed */
+  min-height: 100vh;
+  overflow-x: hidden; /* Prevent horizontal scroll */
   position: relative;
+}
+
+/* Fix for iOS Safari to allow proper scrolling */
+@supports (-webkit-touch-callout: none) {
+  body {
+    height: -webkit-fill-available;
+  }
+  
+  html {
+    height: -webkit-fill-available;
+  }
 }
 
 /* Custom scrollbar */
@@ -61,10 +74,24 @@ body {
     text-overflow: ellipsis;
   }
   
-  /* Ensure vertical scroll works */
+  /* Ensure body allows scrolling on mobile */
   body {
     position: relative;
     min-height: 100vh;
-    overflow-y: auto;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
   }
+  
+  /* Make sure main content doesn't have fixed height that breaks scrolling */
+  main {
+    height: auto !important;
+    min-height: auto !important;
+    overflow-y: visible !important;
+  }
+}
+
+/* Global class to fix touch scrolling */
+.touch-scroll {
+  -webkit-overflow-scrolling: touch;
+  overflow-y: auto;
 }

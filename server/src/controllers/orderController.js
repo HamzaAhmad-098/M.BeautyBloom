@@ -1,6 +1,7 @@
 import asyncHandler from 'express-async-handler';
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
+import sendEmail from '../utils/sendEmail.js';
 
 // @desc    Create new order (Guest & User)
 // @route   POST /api/orders
@@ -64,28 +65,62 @@ const addOrderItems = asyncHandler(async (req, res) => {
 
   const createdOrder = await order.save();
 
+  // FIX: Get customer details correctly for both logged-in users and guests
+  let customerEmail, customerName;
+  
+  if (req.user) {
+    // Logged-in user
+    customerEmail = req.user.email;
+    customerName = req.user.name;
+  } else if (guestUser && guestUser.email) {
+    // Guest user with email
+    customerEmail = guestUser.email;
+    customerName = guestUser.name || shippingAddress.name;
+  } else if (shippingAddress && shippingAddress.email) {
+    // Fallback: email from shipping address
+    customerEmail = shippingAddress.email;
+    customerName = shippingAddress.name;
+  }
+
+  // Format shipping address for email
+  const formattedAddress = `${shippingAddress.address}, ${shippingAddress.city} ${shippingAddress.postalCode}, ${shippingAddress.country}`;
+
+  // Send email notification (only if email is available)
+  if (customerEmail) {
+    try {
+      await sendEmail({
+        email: customerEmail,
+        subject: `Order Confirmation - #${createdOrder._id}`,
+        template: 'orderConfirmation',
+        data: {
+          name: customerName,
+          orderId: createdOrder._id,
+          total: totalPrice,
+          paymentMethod: paymentMethod,
+          shippingAddress: formattedAddress,
+        },
+      });
+      console.log(`✅ Order confirmation email sent to ${customerEmail}`);
+    } catch (emailError) {
+      console.error('❌ Failed to send order confirmation email:', emailError.message);
+      // Don't throw error - order was created successfully
+    }
+  } else {
+    console.log(`ℹ️ No email provided for order ${createdOrder._id} - skipping email notification`);
+  }
+
   res.status(201).json(createdOrder);
 });
 
 // @desc    Get order by ID
 // @route   GET /api/orders/:id
-// @access  Private/Guest
+// @access  Public (No authentication required - anyone with order ID can view)
 const getOrderById = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id);
 
   if (order) {
-    // Allow access if user is guest, logged in user, or admin
-    if (
-      !req.user ||
-      (order.user && order.user.toString() === req.user._id.toString()) ||
-      req.user.isAdmin ||
-      (order.guestUser && order.guestUser.email === req.query.guestEmail)
-    ) {
-      res.json(order);
-    } else {
-      res.status(401);
-      throw new Error('Not authorized');
-    }
+    // Public access - anyone with order ID can view it
+    res.json(order);
   } else {
     res.status(404);
     throw new Error('Order not found');
@@ -215,13 +250,13 @@ const cancelOrder = asyncHandler(async (req, res) => {
   // Check authorization
   if (
     !req.user &&
-    (!req.body.guestEmail || order.guestUser.email !== req.body.guestEmail)
+    (!req.body.guestEmail || order.guestUser?.email !== req.body.guestEmail)
   ) {
     res.status(401);
     throw new Error('Not authorized');
   }
 
-  if (req.user && order.user.toString() !== req.user._id.toString()) {
+  if (req.user && order.user && order.user.toString() !== req.user._id.toString()) {
     res.status(401);
     throw new Error('Not authorized');
   }

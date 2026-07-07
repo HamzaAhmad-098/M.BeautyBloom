@@ -46,6 +46,7 @@ const initialState = {
   // Check both token existence and validity
   isAuthenticated: !!(localStorage.getItem('token') && !isTokenExpired(localStorage.getItem('token')) && getUserFromStorage()),
   token: localStorage.getItem('token') || null,
+  verificationRequired: localStorage.getItem('unverifiedUser') ? true : false,
 };
 
 // Set auth headers globally
@@ -108,20 +109,24 @@ export const login = createAsyncThunk(
       
       console.log('Login response:', data);
       
+      // Check if verification is required
+      if (data.requiresVerification) {
+        // Save unverified user for verification page
+        localStorage.setItem('unverifiedUser', JSON.stringify(data.user));
+        localStorage.removeItem('token');
+        delete axios.defaults.headers.common['Authorization'];
+        
+        return rejectWithValue({
+          message: 'Please verify your email before logging in.',
+          requiresVerification: true,
+          user: data.user
+        });
+      }
+      
       // Ensure user object has isAdmin property
       const user = data.user || data;
       if (!user.hasOwnProperty('isAdmin')) {
         user.isAdmin = user.role === 'admin' || false;
-      }
-      
-      // CHECK IF EMAIL IS VERIFIED - NEW CODE
-      if (!user.isVerified) {
-        // Save user info without token to show verification page
-        localStorage.setItem('unverifiedUser', JSON.stringify(user));
-        localStorage.removeItem('token');
-        delete axios.defaults.headers.common['Authorization'];
-        
-        return rejectWithValue('Please verify your email before logging in. You will be redirected to verification page.');
       }
       
       // Save token and user info (only if verified)
@@ -154,6 +159,7 @@ export const login = createAsyncThunk(
     }
   }
 );
+
 export const logout = createAsyncThunk(
   'auth/logout',
   async (_, { rejectWithValue }) => {
@@ -173,6 +179,7 @@ export const logout = createAsyncThunk(
       localStorage.removeItem('token');
       localStorage.removeItem('guestCart');
       localStorage.removeItem('rememberMe');
+      localStorage.removeItem('unverifiedUser');
       sessionStorage.removeItem('userInfo');
       sessionStorage.removeItem('token');
       delete axios.defaults.headers.common['Authorization'];
@@ -205,6 +212,7 @@ export const getMe = createAsyncThunk(
       if (error.response?.status === 401) {
         localStorage.removeItem('userInfo');
         localStorage.removeItem('token');
+        localStorage.removeItem('unverifiedUser');
         delete axios.defaults.headers.common['Authorization'];
       }
       return rejectWithValue(error.response?.data?.message || 'Failed to get user profile');
@@ -308,28 +316,80 @@ export const resetPassword = createAsyncThunk(
   }
 );
 
+// In authSlice.js, add these actions:
+
+// Verify email with token
 export const verifyEmail = createAsyncThunk(
   'auth/verifyEmail',
   async (token, { rejectWithValue }) => {
     try {
-      const { data } = await axios.get(`${API_URL}/auth/verify-email/${token}`);
+      const config = {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      };
+      
+      const response = await axios.post(
+        `${API_URL}/auth/verify-email/${token}`,
+        {},
+        config
+      );
+      
+      const data = response.data;
+      
+      // Store token and user in localStorage
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('userInfo', JSON.stringify(data.user));
+      setAuthHeaders(data.token);
+      
+      // Remove unverified user
+      localStorage.removeItem('unverifiedUser');
+      
       return data;
     } catch (error) {
-      const message = error.response?.data?.message || 'Email verification failed';
-      return rejectWithValue(message);
+      return rejectWithValue(
+        error.response?.data?.message || 
+        error.message || 
+        'Email verification failed'
+      );
     }
   }
 );
 
+// Resend verification email
 export const resendVerification = createAsyncThunk(
   'auth/resendVerification',
-  async (_, { rejectWithValue }) => {
+  async (email, { rejectWithValue }) => {
     try {
-      const { data } = await axios.post(`${API_URL}/auth/resend-verification`);
-      return data;
+      // If email is provided (for unverified users), use that
+      // Otherwise, get from state
+      let userEmail = email;
+      
+      if (!userEmail) {
+        // Try to get from unverified storage
+        const unverifiedUser = localStorage.getItem('unverifiedUser');
+        if (unverifiedUser) {
+          const user = JSON.parse(unverifiedUser);
+          userEmail = user.email;
+        }
+      }
+      
+      if (!userEmail) {
+        return rejectWithValue('Email is required to resend verification');
+      }
+      
+      const response = await axios.post(
+        `${API_URL}/auth/resend-verification`,
+        { email: userEmail }
+      );
+      
+      return response.data;
     } catch (error) {
-      const message = error.response?.data?.message || 'Failed to resend verification';
-      return rejectWithValue(message);
+      return rejectWithValue(
+        error.response?.data?.message || 
+        error.message || 
+        'Failed to resend verification email'
+      );
     }
   }
 );
@@ -348,10 +408,14 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.error = null;
       state.success = false;
+      state.verificationRequired = false;
     },
     setUser: (state, action) => {
       state.userInfo = action.payload;
       state.isAuthenticated = true;
+    },
+    setVerificationRequired: (state, action) => {
+      state.verificationRequired = action.payload;
     },
   },
   extraReducers: (builder) => {
@@ -367,6 +431,7 @@ const authSlice = createSlice({
         state.token = action.payload.token;
         state.isAuthenticated = true;
         state.success = true;
+        state.verificationRequired = false;
         toast.success(action.payload.message);
       })
       .addCase(register.rejected, (state, action) => {
@@ -386,13 +451,22 @@ const authSlice = createSlice({
         state.token = action.payload.token;
         state.isAuthenticated = true;
         state.success = true;
+        state.verificationRequired = false;
         toast.success(action.payload.message);
       })
       .addCase(login.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload;
+        state.error = action.payload?.message || action.payload;
         state.isAuthenticated = false;
-        toast.error(action.payload);
+        
+        // If verification is required, set the flag
+        if (action.payload?.requiresVerification) {
+          state.verificationRequired = true;
+          state.userInfo = action.payload.user;
+          toast.error(action.payload.message);
+        } else {
+          toast.error(action.payload?.message || action.payload);
+        }
       })
       
       // Logout
@@ -401,6 +475,7 @@ const authSlice = createSlice({
         state.token = null;
         state.isAuthenticated = false;
         state.success = false;
+        state.verificationRequired = false;
         toast.success('Logged out successfully');
       })
       
@@ -412,11 +487,13 @@ const authSlice = createSlice({
         state.loading = false;
         state.userInfo = action.payload;
         state.isAuthenticated = true;
+        state.verificationRequired = false;
       })
       .addCase(getMe.rejected, (state) => {
         state.loading = false;
         state.userInfo = null;
         state.isAuthenticated = false;
+        state.verificationRequired = false;
       })
       
       // Update Profile
@@ -445,21 +522,42 @@ const authSlice = createSlice({
       })
       
       // Verify Email
+      .addCase(verifyEmail.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
       .addCase(verifyEmail.fulfilled, (state, action) => {
-        if (state.userInfo) {
-          state.userInfo.isVerified = true;
-        }
+        state.loading = false;
+        state.userInfo = action.payload.user;
+        state.token = action.payload.token;
+        state.isAuthenticated = true;
+        state.success = true;
+        state.verificationRequired = false;
         toast.success(action.payload.message || 'Email verified successfully');
+      })
+      .addCase(verifyEmail.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+        toast.error(action.payload);
       })
       
       // Resend Verification
-      .addCase(resendVerification.fulfilled, (state, action) => {
-        toast.success(action.payload.message || 'Verification email sent');
+      .addCase(resendVerification.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(resendVerification.fulfilled, (state) => {
+        state.loading = false;
+        toast.success('Verification email sent');
+      })
+      .addCase(resendVerification.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+        toast.error(action.payload);
       });
   },
 });
 
-export const { clearError, clearAuth, setUser } = authSlice.actions;
+export const { clearError, clearAuth, setUser, setVerificationRequired } = authSlice.actions;
 
 // Enhanced Selectors
 export const selectCurrentUser = (state) => {
@@ -478,5 +576,6 @@ export const selectIsAdmin = (state) => {
 export const selectIsVerified = (state) => state.auth.userInfo?.isVerified || false;
 export const selectAuthLoading = (state) => state.auth.loading;
 export const selectAuthError = (state) => state.auth.error;
+export const selectVerificationRequired = (state) => state.auth.verificationRequired;
 
 export default authSlice.reducer;

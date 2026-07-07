@@ -98,7 +98,7 @@ const deleteProductReview = asyncHandler(async (req, res) => {
 // @route   GET /api/products
 // @access  Public
 const getProducts = asyncHandler(async (req, res) => {
-  const pageSize = 12;
+  const pageSize = 20;
   const page = Number(req.query.pageNumber) || 1;
   
   // Extract all filter parameters
@@ -145,6 +145,10 @@ const getProducts = asyncHandler(async (req, res) => {
     query.rating = { $gte: Number(rating) };
   }
 
+  console.log('Database Query:', JSON.stringify(query, null, 2));
+
+  const count = await Product.countDocuments(query);
+  
   // Sort options
   let sortOption = {};
   switch (sort) {
@@ -166,16 +170,17 @@ const getProducts = asyncHandler(async (req, res) => {
       break;
   }
 
-  console.log('Query:', JSON.stringify(query, null, 2));
-  console.log('Sort:', sortOption);
-
-  const count = await Product.countDocuments(query);
   const products = await Product.find(query)
     .limit(pageSize)
     .skip(pageSize * (page - 1))
     .sort(sortOption);
 
-  res.json({ products, page, pages: Math.ceil(count / pageSize) });
+  res.json({ 
+    products, 
+    page, 
+    pages: Math.ceil(count / pageSize),
+    total: count 
+  });
 });
 // @desc    Get product by ID
 // @route   GET /api/products/:id
@@ -472,7 +477,7 @@ const getTopProducts = asyncHandler(async (req, res) => {
 // @route   GET /api/products/featured
 // @access  Public
 const getFeaturedProducts = asyncHandler(async (req, res) => {
-  const products = await Product.find({ isFeatured: true }).limit(8);
+  const products = await Product.find({ isFeatured: true });
   res.json(products);
 });
 
