@@ -27,25 +27,25 @@
     <meta name="robots" content="index, follow" />
     
     <!-- Canonical URL -->
-    <link rel="canonical" href="https://www.mbeautybloom.shop" />
+    <link rel="canonical" href="https://mbeautybloom.shop" />
     
     <!-- Open Graph / Facebook Meta Tags -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://www.mbeautybloom.shop" />
+    <meta property="og:url" content="https://mbeautybloom.shop" />
     <meta property="og:site_name" content="M Beauty Bloom" />
     <meta property="og:title" content="M Beauty Bloom - Premium Cosmetics & Beauty Products" />
     <meta property="og:description" content="Shop premium cosmetics, skincare, makeup, haircare, and beauty products online in Pakistan. Free shipping on orders above Rs. 2000." />
-    <meta property="og:image" content="https://www.mbeautybloom.shop/og-image.jpg" />
+    <meta property="og:image" content="https://mbeautybloom.shop/og-image.jpg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:locale" content="en_PK" />
     
     <!-- Twitter Card Meta Tags -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:url" content="https://www.mbeautybloom.shop" />
+    <meta name="twitter:url" content="https://mbeautybloom.shop" />
     <meta name="twitter:title" content="M Beauty Bloom - Premium Cosmetics & Beauty Products" />
     <meta name="twitter:description" content="Shop premium cosmetics, skincare, makeup, haircare, and beauty products online in Pakistan. Free shipping on orders above Rs. 2000." />
-    <meta name="twitter:image" content="https://www.mbeautybloom.shop/twitter-image.jpg" />
+    <meta name="twitter:image" content="https://mbeautybloom.shop/twitter-image.jpg" />
     
     <!-- Additional SEO Meta Tags -->
     <meta name="geo.region" content="PK-SD" />
@@ -83,11 +83,11 @@
       "@context": "https://schema.org",
       "@type": "WebSite",
       "name": "M Beauty Bloom",
-      "url": "https://www.mbeautybloom.shop",
+      "url": "https://mbeautybloom.shop",
       "description": "Premium cosmetics and beauty products online store in Pakistan",
       "potentialAction": {
         "@type": "SearchAction",
-        "target": "https://www.mbeautybloom.shop/shop?search={search_term_string}",
+        "target": "https://mbeautybloom.shop/shop?search={search_term_string}",
         "query-input": "required name=search_term_string"
       }
     }
@@ -98,8 +98,8 @@
       "@context": "https://schema.org",
       "@type": "Organization",
       "name": "M Beauty Bloom",
-      "url": "https://www.mbeautybloom.shop",
-      "logo": "https://www.mbeautybloom.shop/logo.png",
+      "url": "https://mbeautybloom.shop",
+      "logo": "https://mbeautybloom.shop/logo.png",
       "description": "Premium cosmetics and beauty products",
       "address": {
         "@type": "PostalAddress",
@@ -120,8 +120,8 @@
       "@context": "https://schema.org",
       "@type": "Store",
       "name": "M Beauty Bloom",
-      "image": "https://www.mbeautybloom.shop/store-image.jpg",
-      "url": "https://www.mbeautybloom.shop",
+      "image": "https://mbeautybloom.shop/store-image.jpg",
+      "url": "https://mbeautybloom.shop",
       "telephone": "+92-XXX-XXXXXXX",
       "priceRange": "Rs. 500 - Rs. 15,000",
       "address": {
@@ -168,7 +168,7 @@
               console.log('✅ ServiceWorker registered:', registration.scope);
             })
             .catch(err => {
-              console.log('⚠️TESt TEst ServiceWorker registration failed:', err);
+              console.log('⚠️ ServiceWorker registration failed:', err);
             });
         });
       }
@@ -178,12 +178,12 @@
     <script>
       // If someone visits via old Railway URL, redirect them
       if (window.location.hostname === 'ingenious-laughter-production.up.railway.app') {
-        window.location.replace('https://www.mbeautybloom.shop' + window.location.pathname + window.location.search);
+        window.location.replace('https://mbeautybloom.shop' + window.location.pathname + window.location.search);
       }
       
-      // Redirect non-www to www (optional but good for consistency)
-      if (window.location.hostname === 'mbeautybloom.shop') {
-        window.location.replace('https://www.mbeautybloom.shop' + window.location.pathname + window.location.search);
+      // Redirect www to root (matches server-side canonical domain)
+      if (window.location.hostname === 'www.mbeautybloom.shop') {
+        window.location.replace('https://mbeautybloom.shop' + window.location.pathname + window.location.search);
       }
     </script>
   </body>
